@@ -64,7 +64,9 @@ jobs:
           fi
           # 잡이 끝나면 함께 사라지는 임시 디렉터리에만 푼다.
           keystore_path="${RUNNER_TEMP}/release.jks"
-          echo "$KEYSTORE_BASE64" | base64 -d > "$keystore_path"
+          # 시크릿을 Windows 에서 등록하면 CR 이나 줄바꿈이 섞여 들어가 base64 가 invalid input 으로
+          # 실패한다. 디코드 전에 공백류를 전부 걷어낸다.
+          printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > "$keystore_path"
           echo "path=$keystore_path" >> "$GITHUB_OUTPUT"
           echo "signed=true" >> "$GITHUB_OUTPUT"
 

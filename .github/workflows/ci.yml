@@ -179,16 +179,14 @@ jobs:
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
+          # script 는 sh -c 로 통째로 넘어간다. 백슬래시 줄바꿈을 쓰면 `\` 가 인자로 남아
+          # "Flow path does not exist: \" 로 실패한다 — 긴 명령도 한 줄로 쓴다.
+          # --flatten-debug-output: 실패 스크린샷을 타임스탬프 폴더 없이 한곳에 모아
+          # 아티팩트에서 바로 찾을 수 있게 한다.
           script: |
             adb install -r artifacts/app-debug.apk
             mkdir -p reports
-            # --flatten-debug-output: 실패 스크린샷을 타임스탬프 폴더 없이 한곳에 모아
-            # 아티팩트에서 바로 찾을 수 있게 한다.
-            maestro test .maestro/ \
-              --format HTML-DETAILED \
-              --output reports/report.html \
-              --debug-output reports/debug \
-              --flatten-debug-output
+            maestro test .maestro/ --format HTML-DETAILED --output reports/report.html --debug-output reports/debug --flatten-debug-output
 
       - name: E2E 리포트 보관
         if: always()

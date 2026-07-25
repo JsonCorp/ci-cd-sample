@@ -942,10 +942,23 @@ gh secret set ANDROID_KEY_PASSWORD
             exit 0
           fi
           keystore_path="${RUNNER_TEMP}/release.jks"    # 잡과 함께 사라지는 위치
-          echo "$KEYSTORE_BASE64" | base64 -d > "$keystore_path"
+          printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > "$keystore_path"
           echo "path=$keystore_path" >> "$GITHUB_OUTPUT"
           echo "signed=true" >> "$GITHUB_OUTPUT"
 ```
+
+> ⚠️ **함정**: 위 줄에 `tr -d '[:space:]'` 가 왜 있는지가 중요합니다.
+> 처음에는 `echo "$KEYSTORE_BASE64" | base64 -d` 였고, 첫 태그 push 는 이렇게 실패했습니다.
+>
+> ```
+> base64: invalid input
+> ##[error]Process completed with exit code 1.
+> ```
+>
+> 원인은 워크플로가 아니라 **시크릿을 등록한 방법**이었습니다. PowerShell 에서
+> `$b64 | gh secret set ANDROID_KEYSTORE_BASE64` 로 파이프하면 값 끝에 CR 이 섞여 들어갑니다.
+> `gh secret set --body $b64` 로 넣으면 깨끗하지만, 등록 방법을 강제할 수는 없으니
+> **디코드하는 쪽에서 공백류를 걷어내는 편이 안전합니다.**
 
 ### 9-3. 시크릿이 없어도 통과해야 한다
 
@@ -1008,9 +1021,18 @@ R8 을 켜 둔 덕분에 결과물이 작습니다. 실측입니다.
 릴리스 빌드는 실기기에 설치해서 실행까지 확인했습니다. R8 이 Compose·Hilt 코드를 잘못 지우면
 **빌드는 통과하고 실행할 때 죽기 때문에**, 이 확인은 건너뛰면 안 됩니다.
 
+그리고 게시된 뒤에는 **Releases 에서 내려받아** 서명을 확인했습니다. 로컬에서 만든 게 아니라
+CI 가 만든 파일이 제대로 서명됐는지 봐야 의미가 있습니다.
+
 ```powershell
-apksigner verify --print-certs app-release.apk
+gh release download v0.1.0 --pattern "*.apk"
+apksigner verify --print-certs ci-cd-sample-0.1.0.apk
 # Signer #1 certificate DN: CN=ci-cd-sample, OU=Sample, O=JsonCorp, L=Seoul, C=KR
+# Signer #1 certificate SHA-256 digest: ee4eb2ce...   ← 로컬 키스토어 지문과 일치
+
+aapt dump badging ci-cd-sample-0.1.0.apk
+# package: name='com.example.cicdsample' versionCode='2' versionName='0.1.0'
+#                                        ↑ github.run_number 가 들어갔다
 ```
 
 ---
@@ -1040,6 +1062,7 @@ apksigner verify --print-certs app-release.apk
 | `hideKeyboard` 가 back 키 | 앱이 종료되고 홈 화면이 캡처됨 | 버튼을 키보드 위쪽으로 옮겨 아예 제거 |
 | 정렬로 인덱스 이동 | 다른 항목을 누름 | 플로우에 주석 명시 |
 | `script` 의 백슬래시 줄바꿈 | `Flow path does not exist: \` | 긴 명령도 한 줄로 |
+| base64 시크릿에 CR 혼입 | `base64: invalid input` | 디코드 전 `tr -d '[:space:]'` |
 | `gradlew` 실행 비트 | 리눅스에서 `exit code 126` | 커밋 전 `git update-index --chmod=+x` |
 | 앱 실행 실패 (간헐) | `Unable to launch app` | 재실행 시 정상. 조건 대기로 완화 |
 

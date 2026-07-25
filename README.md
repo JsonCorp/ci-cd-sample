@@ -1,6 +1,8 @@
 # ci-cd-sample
 
 [![CI](https://github.com/JsonCorp/ci-cd-sample/actions/workflows/ci.yml/badge.svg)](https://github.com/JsonCorp/ci-cd-sample/actions/workflows/ci.yml)
+[![Release](https://github.com/JsonCorp/ci-cd-sample/actions/workflows/release.yml/badge.svg)](https://github.com/JsonCorp/ci-cd-sample/actions/workflows/release.yml)
+[![latest](https://img.shields.io/github/v/release/JsonCorp/ci-cd-sample)](https://github.com/JsonCorp/ci-cd-sample/releases/latest)
 
 안드로이드 **공식 3계층 아키텍처 + DI** 위에 **GitHub Actions CI/CD** 를 올린 레퍼런스 저장소.
 
@@ -64,6 +66,9 @@ powershell -ExecutionPolicy Bypass -File scripts\run-tests.ps1
   Gradle 캐시(`gradle/actions/setup-gradle`)와 AVD 스냅샷 캐시를 함께 쓴다.
 - **`release.yml`** — `v*` 태그를 밀면 태그와 `versionName` 이 같은지 확인하고, 시크릿의 키스토어로
   서명한 APK/AAB 를 GitHub Releases 에 올린다. 시크릿이 없는 포크에서는 **서명을 건너뛰고 계속 진행**한다.
+
+실측(2026-07-26): `unit-test` 1분 10초 · `build` 1분 08초(병렬) · `e2e` 5분 06초 → 전체 6분 16초.
+Gradle 캐시 적중 전에는 각각 3분 02초 / 3분 31초였다.
 
 ## 문서
 

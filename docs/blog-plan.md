@@ -50,7 +50,15 @@ CI: [1차 실행(E2E 실패)](https://github.com/JsonCorp/ci-cd-sample/actions/r
   `checkbox_task_0` 이 다른 항목을 가리킨다. → 플로우에 주석 명시.
 - **`Unable to launch app`** 이 단발성으로 뜬 적이 있다(재실행 시 정상). Maestro 2.6.1 에는
   CLI 재시도 플래그가 없어 조건 대기로만 완화 가능.
+- **PowerShell 파이프로 등록한 base64 시크릿에 CR 이 섞여** 릴리스 워크플로가
+  `base64: invalid input` 으로 실패. `gh secret set --body` 로 재등록 + 워크플로에서
+  `tr -d '[:space:]'` 로 방어. 두 가지를 다 했다.
 - Gradle 캐시 효과가 뚜렷하다: `unit-test` 3분 02초 → 1분 10초, `build` 3분 31초 → 1분 08초.
+
+**릴리스 검증**: [v0.1.0 릴리스](https://github.com/JsonCorp/ci-cd-sample/releases/tag/v0.1.0) 에
+`ci-cd-sample-0.1.0.apk`(1.01 MB) + `.aab`(2.44 MB) 게시 확인. 내려받아 `apksigner verify` 로
+로컬 키스토어와 같은 인증서(SHA-256 `ee4eb2ce…`)임을 확인했고, `versionCode=2`(run_number)가
+들어간 것도 확인했다.
 
 ## 2편 후보 — 앞으로 쓸 만한 것
 

@@ -28,7 +28,7 @@ jobs:
           java-version: "17"
 
       - name: Gradle 설정 및 캐시
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       # 태그와 앱 버전이 어긋난 채로 릴리스가 나가면 나중에 어느 커밋인지 추적할 수 없다.
       # 빌드 전에 먼저 막는다.

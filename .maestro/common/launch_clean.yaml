@@ -1,0 +1,6 @@
+appId: com.example.cicdsample
+name: 공통 — 앱 데이터를 지우고 새로 실행 (runFlow 서브플로우)
+---
+- launchApp:
+    stopApp: true
+    clearState: true

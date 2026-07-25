@@ -1,0 +1,42 @@
+appId: com.example.cicdsample
+name: 완료 체크 — 항목을 체크하면 완료율이 다시 계산된다
+---
+- runFlow: common/launch_clean.yaml
+
+- tapOn:
+    id: "input_title"
+- inputText: "First task"
+- tapOn:
+    id: "btn_add"
+
+- tapOn:
+    id: "input_title"
+- inputText: "Second task"
+- tapOn:
+    id: "btn_add"
+
+- assertVisible:
+    id: "text_stats"
+    text: "0 / 2 완료 (0%)"
+
+# 하나만 체크하면 50%
+- tapOn:
+    id: "checkbox_task_0"
+- assertVisible:
+    id: "text_stats"
+    text: "1 / 2 완료 (50%)"
+
+# 완료한 항목은 목록 아래로 내려가므로, 맨 위(index 0)에는 이제 남은 항목이 올라와 있다.
+# 같은 체크박스를 다시 누르는 게 아니라 다른 항목을 누르는 것이다.
+- tapOn:
+    id: "checkbox_task_0"
+- assertVisible:
+    id: "text_stats"
+    text: "2 / 2 완료 (100%)"
+
+# 다시 누르면 원래대로 돌아온다
+- tapOn:
+    id: "checkbox_task_0"
+- assertVisible:
+    id: "text_stats"
+    text: "1 / 2 완료 (50%)"

@@ -1,0 +1,49 @@
+appId: com.example.cicdsample
+name: 필터 — 미완료와 완료 탭이 각각 해당하는 항목만 보여준다
+---
+- runFlow: common/launch_clean.yaml
+
+- tapOn:
+    id: "input_title"
+- inputText: "Keep me"
+- tapOn:
+    id: "btn_add"
+
+- tapOn:
+    id: "input_title"
+- inputText: "Finish me"
+- tapOn:
+    id: "btn_add"
+
+# 두 번째 항목(Finish me)을 완료 처리한다
+- assertVisible:
+    text: "Finish me"
+- tapOn:
+    id: "checkbox_task_1"
+- assertVisible:
+    id: "text_stats"
+    text: "1 / 2 완료 (50%)"
+
+# 미완료 탭
+- tapOn:
+    id: "btn_filter_active"
+- assertVisible:
+    text: "Keep me"
+- assertNotVisible:
+    text: "Finish me"
+
+# 완료 탭
+- tapOn:
+    id: "btn_filter_done"
+- assertVisible:
+    text: "Finish me"
+- assertNotVisible:
+    text: "Keep me"
+
+# 전체 탭으로 돌아오면 둘 다 보인다
+- tapOn:
+    id: "btn_filter_all"
+- assertVisible:
+    text: "Keep me"
+- assertVisible:
+    text: "Finish me"

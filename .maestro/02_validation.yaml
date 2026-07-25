@@ -1,0 +1,46 @@
+appId: com.example.cicdsample
+name: 입력 검증 — 너무 짧은 제목과 중복 제목은 목록에 들어가지 않는다
+---
+- runFlow: common/launch_clean.yaml
+
+# 1) 한 글자는 거부된다
+- tapOn:
+    id: "input_title"
+- inputText: "a"
+- tapOn:
+    id: "btn_add"
+
+- assertVisible:
+    id: "text_error"
+    text: "2자 이상 입력해 주세요."
+- assertVisible:
+    id: "text_stats"
+    text: "0 / 0 완료 (0%)"
+
+# 2) 정상 제목을 하나 넣는다
+- tapOn:
+    id: "input_title"
+- eraseText
+- inputText: "Workout"
+- tapOn:
+    id: "btn_add"
+- assertVisible:
+    id: "text_stats"
+    text: "0 / 1 완료 (0%)"
+
+# 3) 대소문자와 공백만 다른 제목도 중복으로 막힌다 (도메인 규칙 검증)
+- tapOn:
+    id: "input_title"
+- inputText: "  workout  "
+- tapOn:
+    id: "btn_add"
+
+- assertVisible:
+    id: "text_error"
+    text: "이미 같은 할 일이 있습니다."
+- assertVisible:
+    id: "text_stats"
+    text: "0 / 1 완료 (0%)"
+
+# 검증이 걸린 순간을 증거로 남긴다. 경로를 reports/ 로 줘야 CI 아티팩트에 함께 담긴다.
+- takeScreenshot: reports/validation_blocked

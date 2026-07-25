@@ -1,6 +1,28 @@
 # Claude Code (local settings)
 .claude/settings.local.json
 
+# Gradle / Android
+.gradle/
+.kotlin/
+build/
+app/build/
+data/build/
+domain/build/
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+*.iml
+
+# 테스트 산출물 (CI 아티팩트로만 보존한다)
+reports/
+
+# 서명 키 — 저장소에 절대 올리지 않는다
+*.jks
+*.keystore
+*.b64
+keystore.properties
+
 # OS
 Thumbs.db
 Desktop.ini
@@ -18,9 +40,3 @@ Desktop.ini
 .env
 .env.*
 !.env.example
-
-# Build output
-dist/
-build/
-out/
-node_modules/

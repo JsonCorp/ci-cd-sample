@@ -1,0 +1,37 @@
+appId: com.example.cicdsample
+name: 완료 항목 정리 — 완료한 항목만 한 번에 지운다
+---
+- runFlow: common/launch_clean.yaml
+
+- tapOn:
+    id: "input_title"
+- inputText: "Keep me"
+- tapOn:
+    id: "btn_add"
+
+- tapOn:
+    id: "input_title"
+- inputText: "Remove me"
+- tapOn:
+    id: "btn_add"
+
+- assertVisible:
+    id: "btn_clear_completed"
+
+# 두 번째 항목만 완료 처리
+- tapOn:
+    id: "checkbox_task_1"
+- assertVisible:
+    id: "text_stats"
+    text: "1 / 2 완료 (50%)"
+
+- tapOn:
+    id: "btn_clear_completed"
+
+- assertVisible:
+    text: "Keep me"
+- assertNotVisible:
+    text: "Remove me"
+- assertVisible:
+    id: "text_stats"
+    text: "0 / 1 완료 (0%)"

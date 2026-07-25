@@ -1,0 +1,9 @@
+# 리눅스 러너에서 실행되는 파일은 CRLF 가 섞이면 깨진다.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+gradlew text eol=lf
+*.jar binary
+*.png binary
+*.jpg binary
+*.pptx binary

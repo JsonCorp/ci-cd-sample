@@ -1,0 +1,31 @@
+appId: com.example.cicdsample
+name: 할 일 추가 — 제목을 입력해 추가하면 목록과 통계가 함께 바뀐다
+---
+- runFlow: common/launch_clean.yaml
+
+# 첫 실행에는 아무것도 없다
+- assertVisible:
+    id: "text_empty"
+- assertVisible:
+    id: "text_stats"
+    text: "0 / 0 완료 (0%)"
+
+- tapOn:
+    id: "input_title"
+# Maestro 의 inputText 는 유니코드를 넣지 못한다(ASCII 만 가능) — 입력값만 영문으로 쓴다.
+# 화면에 표시되는 한글을 assertVisible 로 확인하는 것은 문제없다.
+- inputText: "Buy milk"
+
+
+- tapOn:
+    id: "btn_add"
+
+- assertVisible:
+    text: "Buy milk"
+- assertVisible:
+    id: "text_stats"
+    text: "0 / 1 완료 (0%)"
+
+# 추가에 성공하면 에러 문구가 없다
+- assertNotVisible:
+    id: "text_error"

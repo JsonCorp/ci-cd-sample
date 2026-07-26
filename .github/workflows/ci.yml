@@ -39,7 +39,7 @@ jobs:
       # Gradle 배포판·의존성·빌드 캐시를 한 번에 관리한다.
       # PR 잡은 캐시를 읽기만 하고 쓰지 않아(기본 동작) main 의 캐시가 오염되지 않는다.
       - name: Gradle 설정 및 캐시
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: 단위 테스트
         run: ./gradlew :domain:test :data:testDebugUnitTest :app:testDebugUnitTest
@@ -95,7 +95,7 @@ jobs:
           java-version: "17"
 
       - name: Gradle 설정 및 캐시
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: assembleDebug
         run: ./gradlew assembleDebug

@@ -98,8 +98,8 @@ CI: [1차 실행(E2E 실패)](https://github.com/JsonCorp/ci-cd-sample/actions/r
 
 | 종류 | PR | CI | 처리 |
 |---|---|---|---|
-| GitHub Actions 버전 업 | #1 `gradle/actions` 4→6, #3 `setup-java` 4→5, #4 `upload-artifact` 4→7, #5 `checkout` 4→7 | 통과 | **병합** — Node.js 20 지원 종료 경고도 함께 해소 |
-| GitHub Actions 버전 업 | #2 `download-artifact` 4→8 | 최초 실패(digest-mismatch) | rebase 요청 후 재확인 대상 |
+| GitHub Actions 버전 업 | #1 `gradle/actions` 4→6, #3 `setup-java` 4→5, #4 `upload-artifact` 4→7, #5 `checkout` 4→7 | 통과 | **병합** |
+| GitHub Actions 버전 업 | #2 `download-artifact` 4→8 | 최초 실패(digest-mismatch) → rebase 후 통과 | **병합** |
 | Gradle 의존성 | #6 kotlin 그룹, #7 compose-bom 2026.06, #8 hilt 그룹, #9 AGP 9.3.1, #10 core-ktx 1.19 | 실패 | **보류** — `compileSdk 37` 요구. 아래 참고 |
 
 Gradle 쪽 실패 원인은 전부 하나로 모인다.
@@ -112,3 +112,8 @@ depend on it to compile against version 37 or later of the Android APIs.
 
 `compileSdk 35 → 37` + AGP `8.7.3 → 9.x` + Kotlin/KSP/Hilt 동시 이동이 필요한 **한 덩어리 마이그레이션**이라
 개별 병합이 불가능하다. PR 은 열어 둔 채 후속 작업으로 남긴다.
+
+**병합 후 확인**: `upload-artifact` 는 v7, `download-artifact` 는 v8 로 짝이 맞아야 한다
+(v4 + v8 조합은 `digest-mismatch` 로 실패). 병합 완료 후 main CI 전 잡 초록,
+Node.js 20 지원 종료 경고 3건 → **0건**.
+실행 시간도 더 줄었다: `build` 44초 · `unit-test` 56초 · `e2e` 4분 24초.

@@ -1088,8 +1088,13 @@ Dependabot 은 켜자마자 PR 10개를 열었고, 결과가 정확히 갈렸습
 
 | 종류 | 결과 | 처리 |
 |---|---|---|
-| GitHub Actions 버전 업 4건 (`checkout`·`setup-java`·`upload-artifact`·`gradle/actions`) | 통과 | 병합 — Node.js 20 지원 종료 경고까지 함께 사라졌다 |
+| GitHub Actions 버전 업 5건 (`checkout`·`setup-java`·`upload-artifact`·`download-artifact`·`gradle/actions`) | 통과 | 병합 — Node.js 20 지원 종료 경고 3건이 **0건**이 됐다 |
 | Gradle 의존성 5건 (AGP 9.3.1, Kotlin 그룹, Compose BOM 2026.06, Hilt 그룹, `core-ktx` 1.19) | 실패 | 보류 |
+
+액션 쪽에서 하나 배운 게 있습니다. `download-artifact` 만 v8 로 올리는 PR 은 처음에
+`digest-mismatch` 로 실패했습니다. **업로드와 다운로드 액션은 짝**이라, `upload-artifact` 가 v4 인 채로
+다운로드만 v8 이면 아티팩트 다이제스트를 검증하지 못합니다. `upload-artifact` 를 v7 로 먼저 병합한 뒤
+rebase 하니 바로 통과했습니다.
 
 실패한 쪽 로그를 열어 보면 이유가 한 줄로 나옵니다.
 

@@ -199,9 +199,12 @@ Hilt 2.53.1 + KSP. `:domain` 은 **DI 프레임워크를 모른다** — 생성�
    test/lint 리포트        maestro-report            실패 시 PR 코멘트
 ```
 
+실측(2026-07-26, 캐시 적중): `unit-test` 1분 10초 · `build` 57초(병렬) · `e2e` 4분 35초 → 전체 **5분 42초**.
+캐시가 없던 첫 실행은 `unit-test` 3분 02초 / `build` 3분 31초였다.
+
 | 잡 | 트리거 조건 | 캐시 | 산출물 |
 |----|-------------|------|--------|
-| `unit-test` | 항상 | `gradle/actions/setup-gradle@v4` | 테스트·린트 HTML, Job Summary 집계표 |
+| `unit-test` | 항상 | `gradle/actions/setup-gradle` | 테스트·린트 HTML, Job Summary 집계표 |
 | `build` | 항상 | 위와 동일 | `app-debug.apk`, Job Summary APK 크기 |
 | `e2e` | `needs: build` | AVD 스냅샷(`~/.android/avd`) | `report.html`, 실패 스크린샷 |
 | `notify` | `failure()` && PR | — | PR 코멘트(GITHUB_TOKEN 만) |
@@ -252,7 +255,7 @@ CI 워크플로는 시크릿을 **하나도 쓰지 않으므로** 포크 PR 에�
 | 정적 분석 | Android Lint (`lintDebug`) | detekt/ktlint 는 플러그인 버전 리스크로 보류 |
 | 캐시 | Gradle + AVD 스냅샷 | AVD 캐시 키를 API 레벨에 묶어 무효화 제어 |
 | 비용 | 공개 저장소 = Actions 무료 | `concurrency` 취소 + `needs` 로 낭비 차단 |
-| 의존성 갱신 | Dependabot (gradle 주간 / actions 월간) | kotlin·ksp·compose·hilt 를 그룹으로 묶어 동시 갱신 |
+| 의존성 갱신 | Dependabot (gradle 주간 / actions 월간) | actions 4건 병합 완료. gradle 5건은 `compileSdk 37` 요구로 보류 |
 | 배포 확장 | GitHub Releases | Firebase App Distribution / Play Console 추가 가능 |
 
 ## 11. 요약
@@ -269,5 +272,6 @@ CI 워크플로는 시크릿을 **하나도 쓰지 않으므로** 포크 PR 에�
 | 버전 | 날짜 | 유형 | 변경 내용 |
 |------|------|------|-----------|
 | v0.1.0 | 2026-07-26 | init | 3계층 샘플 앱, 3단 테스트, CI/CD 파이프라인 최초 정리 |
+| v0.1.1 | 2026-07-26 | fix | Actions 버전 4건 갱신(Node 20 경고 해소), CI 실측 시간 반영 |
 
 > **PPTX 동기화 시 위 표를 gen_pptx.py 의 revision_history() rows 와 일치시킬 것.**

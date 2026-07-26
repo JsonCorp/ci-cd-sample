@@ -32,6 +32,10 @@ CI 가 하는 일은 "내가 시킨 검증을 대신 돌려주는 것"입니다.
 | Compose UI 테스트 | 렌더링, 콜백 배선 | 8 | 에뮬레이터 |
 | Maestro E2E | 실제 앱 전체 흐름 | 5 | 에뮬레이터 |
 
+샘플 앱은 이렇게 생겼습니다. 화면은 하나뿐이지만, 뒤에 있는 규칙은 전부 테스트로 덮여 있습니다.
+
+![샘플 앱 화면 — 우선순위별 할 일 목록과 완료율](images/06-app-screen.jpg)
+
 ---
 
 ## 2. 공식 3계층으로 앱 다시 짜기
@@ -614,6 +618,10 @@ FilterSection(
 5/5 Flows Passed in 1m 57s
 ```
 
+`--format HTML-DETAILED` 를 주면 이런 리포트가 함께 나옵니다. CI 에서는 이 파일이 아티팩트로 보존됩니다.
+
+![Maestro HTML 리포트 — 5개 플로우 전부 SUCCESS](images/04-maestro-report.jpg)
+
 ---
 
 ## 7. CI 워크플로 — 잡을 어떻게 쪼갰나
@@ -638,6 +646,13 @@ FilterSection(
          ▼                       ▼                         ▼
    test/lint 리포트        maestro-report          실패 시 PR 코멘트
 ```
+
+실제 실행 화면입니다. 왼쪽 두 잡이 나란히 출발하고, `Maestro E2E` 만 빌드 뒤에 붙습니다.
+
+![CI 실행 상세 — 단위 테스트와 빌드가 병렬로 돌고 E2E 가 뒤를 잇는다](images/01-run-detail-jobs.jpg)
+
+`디버그 APK 빌드` 57초, `단위 테스트 & 린트` 1분 10초가 **동시에** 끝나고,
+`Maestro E2E` 4분 35초가 이어져 전체 **5분 42초**입니다.
 
 ### 7-1. E2E 는 APK 를 다시 빌드하지 않는다
 
@@ -687,10 +702,10 @@ Actions 사용량이 절약됩니다.
 
 효과는 첫 실행과 두 번째 실행을 비교하면 바로 보입니다. 실측입니다.
 
-| 잡 | 1차 실행 (캐시 없음) | 2차 실행 (캐시 적중) |
+| 잡 | 1차 실행 (캐시 없음) | 이후 실행 (캐시 적중) |
 |---|---:|---:|
 | `unit-test` | 3분 02초 | **1분 10초** |
-| `build` | 3분 31초 | **1분 08초** |
+| `build` | 3분 31초 | **57초** |
 
 절반 이하로 줄었습니다. 워크플로 한 줄로 얻는 것치고 가장 큰 개선입니다.
 
@@ -844,6 +859,11 @@ Maestro 는 `--debug-output` 에 **실패했을 때만** 스크린샷을 남깁�
           path: reports/
           retention-days: 7
 ```
+
+실행이 끝나면 결과 페이지 하단에 이렇게 남습니다. APK 까지 같이 있어서 **그 실행에서 나온 바로 그
+빌드**를 내려받아 손으로 확인할 수 있습니다.
+
+![Artifacts — APK, Maestro 리포트, 단위 테스트/린트 리포트](images/02-artifacts.jpg)
 
 원하는 순간을 직접 남기고 싶으면 `takeScreenshot` 을 쓰는데, **경로를 `reports/` 아래로
 줘야 합니다.** 이름만 주면 작업 디렉터리에 떨어져서 아티팩트에 담기지 않습니다.
@@ -1035,6 +1055,8 @@ aapt dump badging ci-cd-sample-0.1.0.apk
 #                                        ↑ github.run_number 가 들어갔다
 ```
 
+![Releases v0.1.0 — 서명된 APK 와 AAB 가 첨부되어 있다](images/05-release-assets.jpg)
+
 ---
 
 ## 10. 실행 결과와 정리
@@ -1048,11 +1070,42 @@ aapt dump badging ci-cd-sample-0.1.0.apk
 | Compose UI 테스트 | 8개, 실기기 2분 36초 |
 | Maestro E2E | 5개, 실기기 1분 57초 |
 | CI `unit-test` 잡 | 3분 02초 → **1분 10초** (Gradle 캐시 적중 후) |
-| CI `build` 잡 | 3분 31초 → **1분 08초** (동일) |
-| CI `e2e` 잡 | 5분 06초 (에뮬레이터 부팅 + 5개 플로우) |
-| CI 전체 | 6분 16초 (`unit-test`·`build` 병렬 → `e2e`) |
+| CI `build` 잡 | 3분 31초 → **57초** (동일) |
+| CI `e2e` 잡 | 4분 35초 (에뮬레이터 부팅 + 5개 플로우) |
+| CI 전체 | **5분 42초** (`unit-test`·`build` 병렬 → `e2e`) |
 | AVD 스냅샷 부팅 | 967 ms (캐시 적중) |
 | 디버그 APK / 릴리스 APK | 9.49 MB / **1.01 MB** (R8 + 서명) |
+
+실행 이력은 저장소의 [Actions 탭](https://github.com/JsonCorp/ci-cd-sample/actions/workflows/ci.yml)에서
+전부 볼 수 있습니다.
+
+![Actions 탭 — 워크플로 실행 이력](images/03-actions-tab.jpg)
+
+초록과 빨강이 섞여 있는 게 정상입니다. 저 빨간 줄들은 전부 **Dependabot 이 올린 의존성 갱신 PR** 이고,
+`main` 은 초록입니다. 파이프라인을 만든 첫날 바로 값어치를 한 부분이라 짚고 갑니다.
+
+Dependabot 은 켜자마자 PR 10개를 열었고, 결과가 정확히 갈렸습니다.
+
+| 종류 | 결과 | 처리 |
+|---|---|---|
+| GitHub Actions 버전 업 4건 (`checkout`·`setup-java`·`upload-artifact`·`gradle/actions`) | 통과 | 병합 — Node.js 20 지원 종료 경고까지 함께 사라졌다 |
+| Gradle 의존성 5건 (AGP 9.3.1, Kotlin 그룹, Compose BOM 2026.06, Hilt 그룹, `core-ktx` 1.19) | 실패 | 보류 |
+
+실패한 쪽 로그를 열어 보면 이유가 한 줄로 나옵니다.
+
+```
+> A failure occurred while executing CheckAarMetadataWorkAction
+   > Dependency 'androidx.core:core:1.19.0' requires libraries and applications that
+     depend on it to compile against version 37 or later of the Android APIs.
+     :app is currently compiled against android-35.
+```
+
+`compileSdk` 를 37 로 올려야 하고, 그러려면 AGP 도 9.x 로 가야 하고, 그러면 Kotlin·KSP·Hilt 도 함께
+움직여야 합니다. **PR 5개가 사실은 한 덩어리의 마이그레이션**이라는 뜻입니다.
+
+여기서 CI 가 한 일이 정확히 이겁니다 — 자동 갱신을 막은 게 아니라, **자동으로 병합됐다면 어디서
+깨졌을지를 미리 보여준 것**입니다. 사람이 로컬에서 하나씩 올려 보며 알아낼 일을 봇과 파이프라인이
+대신 했습니다.
 
 ### 10-2. 밟은 함정 정리
 
@@ -1088,6 +1141,9 @@ aapt dump badging ci-cd-sample-0.1.0.apk
 - **정적 분석 확장** — Android Lint 만 씁니다. detekt/ktlint 는 플러그인 버전 리스크로 미뤘습니다.
 - **배포 확장** — GitHub Releases 까지입니다. Firebase App Distribution 이나 Play Console 은
   외부 계정과 시크릿이 더 필요합니다.
+- **버전 매트릭스 갱신** — `compileSdk 35` / AGP 8.7.3 / Kotlin 2.0.21 에 고정돼 있습니다.
+  Dependabot 이 잡아낸 대로 `compileSdk 37` + AGP 9.x 로 올리는 건 별도의 마이그레이션 작업이라,
+  PR 을 열어 둔 채 남겨 뒀습니다.
 
 ### 10-5. 실제 파일
 

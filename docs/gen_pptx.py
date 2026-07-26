@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """ci-cd-sample 아키텍처 분석 PPTX 생성 (렌더러).
 
 ⚠️ 내용 원본은 docs/ARCHITECTURE.md 이다. 이 스크립트는 그 내용을 슬라이드로
@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pptx_kit import *  # noqa
 
 PROJECT = "ci-cd-sample"
-VERSION = "v0.1.0"
+VERSION = "v0.1.1"
 DATE = "2026-07-26"
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), f"{PROJECT}-아키텍처분석.pptx")
 
@@ -214,11 +214,11 @@ trig = box(s, 0.85, 2.15, 2.35, 0.95, fill=INK, shadow=True)
 label_in(trig, "PR / push(main)\n수동 실행", size=11.5)
 
 j1 = box(s, 4.05, 1.95, 3.35, 1.05, fill=GREEN, shadow=True)
-label_in(j1, "unit-test\n단위 44 + 린트 · 약 3분", size=12)
+label_in(j1, "unit-test\n단위 44 + 린트 · 1분 10초", size=12)
 j2 = box(s, 4.05, 3.30, 3.35, 1.05, fill=BRAND, shadow=True)
-label_in(j2, "build\nassembleDebug · 약 3분 30초", size=12)
+label_in(j2, "build\nassembleDebug · 57초", size=12)
 j3 = box(s, 8.55, 3.30, 3.90, 1.05, fill=ORANGE, shadow=True)
-label_in(j3, "e2e   needs: build\n에뮬레이터 + Maestro", size=12)
+label_in(j3, "e2e   needs: build\n에뮬레이터 + Maestro · 4분 35초", size=12)
 
 arrow(s, 3.20, 2.48, 4.05, 2.48, color=INK, w=2)
 arrow(s, 3.20, 3.83, 4.05, 3.83, color=INK, w=2)
@@ -296,7 +296,7 @@ section_table(
         ("정적 분석", "Android Lint (lintDebug)", "detekt/ktlint 는 플러그인 버전 리스크로 보류"),
         ("캐시", "Gradle + AVD 스냅샷", "AVD 캐시 키를 API 레벨에 묶어 무효화 제어"),
         ("비용", "공개 저장소 = Actions 무료", "concurrency 취소 + needs 로 낭비 차단"),
-        ("의존성 갱신", "Dependabot 주간/월간", "kotlin·ksp·compose·hilt 를 그룹으로 묶어 동시 갱신"),
+        ("의존성 갱신", "Dependabot 주간/월간", "actions 4건 병합. gradle 5건은 compileSdk 37 요구로 보류"),
         ("배포 확장", "GitHub Releases", "Firebase App Distribution / Play Console 추가 가능"),
     ],
 )
@@ -317,7 +317,8 @@ summary(
 
 # ── 13. 문서 변경 이력 ───────────────────────────────────
 revision_history(prs, 13, rows=[
-    ("v0.1.0", DATE, "init", "3계층 샘플 앱, 3단 테스트, CI/CD 파이프라인 최초 정리"),
+    ("v0.1.0", "2026-07-26", "init", "3계층 샘플 앱, 3단 테스트, CI/CD 파이프라인 최초 정리"),
+    ("v0.1.1", DATE, "fix", "Actions 버전 4건 갱신(Node 20 경고 해소), CI 실측 시간 반영"),
 ])
 
 save(prs, OUT)

@@ -68,17 +68,47 @@ CI: [1차 실행(E2E 실패)](https://github.com/JsonCorp/ci-cd-sample/actions/r
 | 빨간불을 일부러 만든다 | 일부러 버그를 심은 브랜치로 실패 경로(아티팩트·PR 코멘트)를 검증 | `demo/` 브랜치 + PR |
 | Actions 사용량 줄이기 | 무료 한도 안에서 E2E 를 유지하는 전략(경로 필터, 매트릭스 축소, 야간 실행) | 사용량 측정 |
 | Compose 화면 스냅샷 테스트 | Paparazzi/Roborazzi 로 렌더링을 JVM 으로 내리기 | 라이브러리 도입 |
+| 버전 매트릭스 올리기 | Dependabot PR 5개가 한 덩어리인 이유와 compileSdk 37 마이그레이션 기록 | AGP 9.x·Kotlin 2.2·compileSdk 37 |
 
-## 스크린샷 (직접 캡처 필요)
+## 스크린샷
 
 `docs/blog/images/NN-slug.jpg` 로 저장하고 `![한국어 캡션](images/NN-slug.jpg)` 로 참조한다.
 
-| 번호 | 캡처 대상 | 어디서 |
-|---|---|---|
-| 01 | Actions 실행 상세 — `unit-test`/`build` 병렬 + `e2e` 후속 | 저장소 → Actions → 2차 실행 |
-| 02 | Job Summary — 단위 테스트 집계표, APK 크기 | 같은 실행 결과 페이지 상단 |
-| 03 | Artifacts 목록 — 리포트·APK·maestro-report | 같은 페이지 하단 |
-| 04 | Maestro HTML 리포트 5/5 통과 | `reports/report.html` |
-| 05 | Releases 페이지 — 서명 APK/AAB 첨부 | 저장소 → Releases |
-| 06 | Secrets 설정 화면 (값은 마스킹됨) | Settings → Secrets and variables → Actions |
-| 07 | 앱 실행 화면 | 실기기 스크린샷 |
+| 파일 | 내용 | 출처 | 상태 |
+|---|---|---|---|
+| `01-run-detail-jobs.jpg` | CI 실행 상세 — 잡 그래프와 각 잡 소요 시간 | Actions 실행 #18 | 완료 |
+| `02-artifacts.jpg` | Artifacts — APK·maestro-report·테스트 리포트 | 같은 실행 페이지 하단 | 완료 |
+| `03-actions-tab.jpg` | Actions 탭 실행 이력 (Dependabot PR 실패 포함) | Actions → CI | 완료 |
+| `04-maestro-report.jpg` | Maestro HTML 리포트 5/5 통과 | 로컬 `reports/report.html` | 완료 |
+| `05-release-assets.jpg` | Releases v0.1.0 — 서명 APK/AAB | Releases | 완료 |
+| `06-app-screen.jpg` | 앱 실행 화면 | 실기기(Galaxy Z Flip5) `adb screencap` | 완료 |
+
+캡처는 헤드리스 Chrome(`--headless=new --screenshot`)과 `adb screencap` 으로 자동화했다.
+로그인이 필요한 화면 두 가지는 **익명 접근으로 렌더링되지 않아 넣지 않았다**:
+
+- **Job Summary** (단위 테스트 집계표·APK 크기) — 잡 페이지에서 로그인해야 보인다.
+  본문에는 이를 만드는 스크립트를 코드 블록으로 대신 실었다.
+- **Secrets 설정 화면** — Settings → Secrets and variables → Actions. 관리자만 접근 가능.
+
+두 장이 필요하면 로그인한 브라우저에서 직접 캡처해 `02`, `07` 번호로 추가하면 된다.
+
+## Dependabot 처리 결과 (2026-07-26)
+
+켜자마자 PR 10개가 열렸고 결과가 갈렸다.
+
+| 종류 | PR | CI | 처리 |
+|---|---|---|---|
+| GitHub Actions 버전 업 | #1 `gradle/actions` 4→6, #3 `setup-java` 4→5, #4 `upload-artifact` 4→7, #5 `checkout` 4→7 | 통과 | **병합** — Node.js 20 지원 종료 경고도 함께 해소 |
+| GitHub Actions 버전 업 | #2 `download-artifact` 4→8 | 최초 실패(digest-mismatch) | rebase 요청 후 재확인 대상 |
+| Gradle 의존성 | #6 kotlin 그룹, #7 compose-bom 2026.06, #8 hilt 그룹, #9 AGP 9.3.1, #10 core-ktx 1.19 | 실패 | **보류** — `compileSdk 37` 요구. 아래 참고 |
+
+Gradle 쪽 실패 원인은 전부 하나로 모인다.
+
+```
+Dependency 'androidx.core:core:1.19.0' requires libraries and applications that
+depend on it to compile against version 37 or later of the Android APIs.
+:app is currently compiled against android-35.
+```
+
+`compileSdk 35 → 37` + AGP `8.7.3 → 9.x` + Kotlin/KSP/Hilt 동시 이동이 필요한 **한 덩어리 마이그레이션**이라
+개별 병합이 불가능하다. PR 은 열어 둔 채 후속 작업으로 남긴다.

@@ -71,7 +71,7 @@ jobs:
 
       - name: 리포트 보관
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unit-test-and-lint-reports
           path: |
@@ -113,7 +113,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: APK 보관
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: app-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
@@ -190,7 +190,7 @@ jobs:
 
       - name: E2E 리포트 보관
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: maestro-report
           path: reports/

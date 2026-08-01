@@ -148,7 +148,7 @@ jobs:
 
       # AVD 생성에만 2~3분이 든다. 스냅샷을 캐시하면 두 번째 실행부터 부팅이 크게 짧아진다.
       - name: AVD 캐시
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         id: avd-cache
         with:
           path: |

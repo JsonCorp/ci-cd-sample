@@ -10,14 +10,53 @@ on:
         type: boolean
         default: true
 
+# 태그를 연속으로 밀면 릴리스 잡이 겹치고 VERSION_CODE(=run_number)가 뒤엉킨다.
+# 릴리스는 중간에 끊으면 안 되므로 취소하지 않고 순서대로 기다린다.
+# 그룹 키에 github.ref 를 쓰면 태그마다 그룹이 갈려 직렬화가 되지 않는다 — 상수로 둔다.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 permissions:
-  contents: write # gh release create 에 필요
+  contents: read
 
 jobs:
+  # ── 0층: 릴리스 전 검증 ───────────────────────────────────────────────────
+  # 태그 푸시는 브랜치 보호 규칙을 우회하는 별개 경로다. 깨진 커밋에 태그를 달면
+  # 그대로 릴리스가 나가므로, 빌드 전에 단위 테스트와 린트를 다시 돌려 막는다.
+  verify:
+    name: 릴리스 전 검증
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Gradle Wrapper 검증
+        uses: gradle/actions/wrapper-validation@v6
+
+      - name: JDK 17 준비
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Gradle 설정 및 캐시
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: 단위 테스트
+        run: ./gradlew :domain:test :data:testDebugUnitTest :app:testDebugUnitTest
+
+      - name: 린트
+        if: ${{ !cancelled() }}
+        run: ./gradlew lintDebug
+
   release:
     name: 서명 릴리스
     runs-on: ubuntu-latest
+    needs: verify
     timeout-minutes: 30
+    permissions:
+      contents: write # gh release create 에 필요
     steps:
       - uses: actions/checkout@v7
 
@@ -101,6 +140,36 @@ jobs:
             done
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # 서명했다고 선언만 하고 실제로 서명이 붙었는지 확인하지 않으면,
+      # 키스토어 설정이 조용히 빠진 빌드를 서명본으로 오해한 채 배포하게 된다.
+      - name: 서명 확인
+        if: steps.keystore.outputs.signed == 'true'
+        run: |
+          apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -n 1)
+          if [ -z "$apksigner" ]; then
+            echo "::error::apksigner 를 찾지 못했습니다 (ANDROID_HOME=$ANDROID_HOME)."
+            exit 1
+          fi
+          "$apksigner" verify --verbose --print-certs \
+            "dist/ci-cd-sample-${{ steps.version.outputs.version_name }}.apk"
+
+      # 내려받은 파일이 여기서 만든 그 파일인지 확인할 수단을 함께 배포한다.
+      # SHA256SUMS 자신이 목록에 들어가지 않도록 확장자를 명시한다.
+      - name: 체크섬 생성
+        run: |
+          ( cd dist && sha256sum ./*.apk ./*.aab > SHA256SUMS )
+          cat dist/SHA256SUMS
+          {
+            echo ""
+            echo "<details><summary>SHA256SUMS</summary>"
+            echo ""
+            echo '```'
+            cat dist/SHA256SUMS
+            echo '```'
+            echo ""
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: 산출물 보관
         uses: actions/upload-artifact@v7
         with:
@@ -112,6 +181,7 @@ jobs:
         if: github.event_name == 'push' || inputs.dry_run == false
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
           notes="자동 생성 릴리스입니다."
           if [ "${{ steps.keystore.outputs.signed }}" != "true" ]; then
@@ -120,11 +190,16 @@ jobs:
           > 이 빌드는 서명 시크릿이 없어 **미서명(unsigned)** 상태입니다. 기기에 바로 설치할 수 없습니다."
           fi
 
-          gh release create "${{ steps.version.outputs.tag }}" \
-            dist/* \
-            --title "${{ steps.version.outputs.tag }}" \
-            --generate-notes \
-            --notes "$notes"
+          # 같은 태그로 재실행하면 create 가 "already exists" 로 죽는다. 있으면 자산만 갈아끼운다.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::notice::릴리스 $TAG 가 이미 있습니다 — 자산만 갱신합니다."
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* \
+              --title "$TAG" \
+              --generate-notes \
+              --notes "$notes"
+          fi
 
       - name: dry run 안내
         if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true

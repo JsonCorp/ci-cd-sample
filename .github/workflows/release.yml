@@ -54,7 +54,7 @@ jobs:
     name: 서명 릴리스
     runs-on: ubuntu-latest
     needs: verify
-    timeout-minutes: 30
+    timeout-minutes: 60
     permissions:
       contents: write # gh release create 에 필요
     steps:
@@ -169,6 +169,57 @@ jobs:
             echo ""
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # ── R8 검증 ─────────────────────────────────────────────────────────
+      # CI 의 E2E 는 debug APK 로 돈다. 릴리스는 isMinifyEnabled + isShrinkResources 라
+      # R8 이 지운 클래스나 잘린 리소스 때문에 릴리스에서만 터지는 결함을 아무도 못 잡는다.
+      # 게시 직전에 실제 릴리스 APK 를 에뮬레이터에 올려 핵심 플로우 하나를 태운다.
+      # 미서명 APK 는 설치가 안 되므로 서명된 경우에만 돈다.
+      - name: KVM 권한 열기 (에뮬레이터 하드웨어 가속)
+        if: steps.keystore.outputs.signed == 'true'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Maestro CLI 설치
+        if: steps.keystore.outputs.signed == 'true'
+        run: |
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: 릴리스 APK 스모크 테스트 (R8 검증)
+        if: steps.keystore.outputs.signed == 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          RELEASE_APK: dist/ci-cd-sample-${{ steps.version.outputs.version_name }}.apk
+        with:
+          api-level: 30
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          # script 는 sh -c 로 통째로 넘어간다 — 백슬래시 줄바꿈을 쓰면 인자로 남는다.
+          # 전체 플로우가 아니라 대표 플로우 하나만 돌린다. 목적은 회귀 검출이 아니라
+          # "난독화된 빌드가 실행은 되는가" 확인이다.
+          script: |
+            adb install -r "$RELEASE_APK"
+            mkdir -p reports/release-smoke
+            maestro test .maestro/01_add_task.yaml --format HTML-DETAILED --output reports/release-smoke/report.html --debug-output reports/release-smoke/debug --flatten-debug-output
+
+      - name: 스모크 테스트 리포트 보관
+        if: ${{ !cancelled() && steps.keystore.outputs.signed == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-smoke-report
+          path: reports/release-smoke/
+          retention-days: 30
+
+      - name: 미서명 빌드 안내
+        if: steps.keystore.outputs.signed != 'true'
+        run: echo "::warning::미서명 빌드라 R8 스모크 테스트를 건너뜁니다. 난독화된 APK 는 검증되지 않았습니다."
 
       - name: 산출물 보관
         uses: actions/upload-artifact@v7

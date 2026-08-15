@@ -28,6 +28,15 @@ powershell -ExecutionPolicy Bypass -File scripts\run-tests.ps1
 | Compose UI 테스트 | `./gradlew :app:pixel6api30DebugAndroidTest` | 관리형 디바이스(GMD) |
 | Maestro E2E | `maestro test .maestro/` | 연결된 기기/에뮬레이터 |
 
+커버리지 리포트:
+
+```bash
+./gradlew :koverXmlReportCustom :koverHtmlReportCustom
+# HTML: build/reports/kover/htmlCustom/index.html
+```
+
+Kover 는 **단위 테스트만** 계측합니다. Compose UI 테스트와 Maestro E2E 는 수치에 들어가지 않습니다.
+
 Compose UI 테스트는 관리형 디바이스를 쓰므로 **에뮬레이터를 미리 띄울 필요가 없습니다.**
 첫 실행은 시스템 이미지를 내려받느라 몇 분 걸립니다. 이미 띄워 둔 기기에서 돌리려면
 `./gradlew :app:connectedDebugAndroidTest` 를 쓰세요.

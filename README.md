@@ -52,6 +52,10 @@ ci-cd-sample/
 
 세 티어 모두 CI 에서 돈다. 관리형 디바이스를 쓰므로 UI 테스트는 에뮬레이터를 미리 띄울 필요가 없다.
 
+커버리지는 Kover 로 세 모듈을 하나로 집계해 PR 요약에 표로 붙는다
+(`./gradlew :koverXmlReportCustom :koverHtmlReportCustom`).
+단, **단위 테스트만** 계측된다 — 계측 테스트는 Kover 가 수집하지 못한다.
+
 ## 빠른 시작
 
 ```bash

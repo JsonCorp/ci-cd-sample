@@ -2,6 +2,7 @@ package com.example.cicdsample.domain.usecase.call
 
 import com.example.cicdsample.domain.model.call.CallEndReason
 import com.example.cicdsample.domain.model.call.CallSnapshot
+import com.example.cicdsample.domain.model.call.MediaSession
 import com.example.cicdsample.domain.model.call.PeerAddress
 import com.example.cicdsample.domain.repository.CallRepository
 import javax.inject.Inject
@@ -38,6 +39,18 @@ class ToggleVideoUseCase @Inject constructor(
     private val repository: CallRepository,
 ) {
     suspend operator fun invoke(enabled: Boolean) = repository.setVideoEnabled(enabled)
+}
+
+/**
+ * 내가 열어 둔 미디어 세션.
+ *
+ * 화면이 "내 주소 192.168.0.5:5004" 같은 한 줄을 보여주려고 쓴다 — 사용자가 SDP 전체를
+ * 옮기지 않고 말로 알려 주는 경우가 더 많다.
+ */
+class GetLocalSessionsUseCase @Inject constructor(
+    private val repository: CallRepository,
+) {
+    operator fun invoke(): List<MediaSession> = repository.localSessions()
 }
 
 /**

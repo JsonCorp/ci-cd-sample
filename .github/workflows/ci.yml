@@ -210,6 +210,99 @@ jobs:
             app/build/outputs/androidTest-results/
           retention-days: 7
 
+  # ── 2층: DB 마이그레이션 ──────────────────────────────────────────────────
+  # 스키마를 바꾸면서 마이그레이션을 빠뜨리면 앱은 '업데이트한 사용자'에게만 죽는다.
+  # 신규 설치는 멀쩡해서 개발 중에는 드러나지 않는다 — 그래서 CI 가 대신 재현한다.
+  # MigrationTestHelper 가 커밋된 스키마 JSON 으로 예전 버전 DB 를 실제로 만들고,
+  # 마이그레이션을 돌린 뒤 결과를 최신 스키마와 대조한다. 실제 SQLite 가 필요해 계측 테스트다.
+  migration-test:
+    name: DB 마이그레이션 테스트
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Gradle Wrapper 검증
+        uses: gradle/actions/wrapper-validation@v6
+
+      - name: JDK 17 준비
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Gradle 설정 및 캐시
+        uses: gradle/actions/setup-gradle@v6
+
+      # ── 스키마 가드 ────────────────────────────────────────────────────────
+      # 테스트를 돌리기 전에 값싼 검사부터 한다. 에뮬레이터를 5분 태우고 나서
+      # "스키마를 커밋 안 했네" 를 알게 되는 건 낭비다.
+      - name: 스키마 JSON 이 코드와 함께 커밋됐는지 검사
+        run: |
+          set -euo pipefail
+          schema_dir=data/schemas/com.example.cicdsample.data.local.AppDatabase
+
+          # 소스의 @Database(version = N) 을 읽는다.
+          version=$(grep -oP 'version\s*=\s*\K[0-9]+' \
+            data/src/main/java/com/example/cicdsample/data/local/AppDatabase.kt | head -1)
+          if [ -z "$version" ]; then
+            echo "::error::AppDatabase.kt 에서 version 을 읽지 못했습니다"
+            exit 1
+          fi
+          echo "선언된 DB 버전: $version"
+
+          # 1..N 의 스키마가 전부 커밋돼 있어야 마이그레이션 테스트가 예전 DB 를 만들 수 있다.
+          missing=0
+          for v in $(seq 1 "$version"); do
+            if [ ! -f "$schema_dir/$v.json" ]; then
+              echo "::error::스키마 파일이 없습니다: $schema_dir/$v.json"
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+
+          # 커밋된 스키마 중 가장 높은 번호가 선언된 버전과 같아야 한다.
+          # 버전만 올리고 스키마를 커밋하지 않은 경우가 여기서 걸린다.
+          latest=$(ls "$schema_dir" | grep -oP '^\K[0-9]+(?=\.json$)' | sort -n | tail -1)
+          if [ "$latest" != "$version" ]; then
+            echo "::error::커밋된 최신 스키마($latest)가 선언된 버전($version)과 다릅니다"
+            exit 1
+          fi
+          echo "스키마 1..$version 이 모두 커밋되어 있습니다"
+
+      - name: KVM 권한 열기 (에뮬레이터 하드웨어 가속)
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # ui-test 잡과 같은 이유다 — 러너는 aosp-atd 이미지 라이선스를 수락해 두지 않는다.
+      - name: Android SDK 라이선스 수락
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$sdkmanager" ]; then
+            echo "::error::sdkmanager 를 찾지 못했습니다: $sdkmanager"
+            exit 1
+          fi
+          yes | "$sdkmanager" --licenses > /dev/null 2>&1 || true
+          if [ ! -f "$ANDROID_HOME/licenses/android-sdk-license" ]; then
+            echo "::error::라이선스 수락에 실패했습니다"
+            exit 1
+          fi
+
+      - name: 마이그레이션 테스트 (관리형 디바이스)
+        run: ./gradlew :data:pixel6api30DebugAndroidTest
+
+      - name: 마이그레이션 리포트 보관
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: migration-test-reports
+          path: |
+            data/build/reports/androidTests/
+            data/build/outputs/androidTest-results/
+          retention-days: 7
+
   # ── 2층: 디버그 APK 빌드 ──────────────────────────────────────────────────
   # 단위 테스트와 병렬로 돈다. 여기서 만든 APK 를 E2E 잡이 그대로 내려받아 쓴다.
   build:
@@ -402,7 +495,7 @@ jobs:
   notify:
     name: 실패 시 PR 코멘트
     runs-on: ubuntu-latest
-    needs: [unit-test, ui-test, build, e2e, dependency-review]
+    needs: [unit-test, ui-test, migration-test, build, e2e, dependency-review]
     if: >-
       failure() &&
       github.event_name == 'pull_request' &&

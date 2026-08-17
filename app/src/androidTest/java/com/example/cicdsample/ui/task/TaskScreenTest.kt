@@ -1,6 +1,7 @@
 package com.example.cicdsample.ui.task
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -11,6 +12,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.cicdsample.domain.model.Priority
 import com.example.cicdsample.domain.model.Task
 import com.example.cicdsample.domain.model.TaskStats
+import java.time.LocalDate
+import java.time.ZoneId
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -117,9 +120,66 @@ class TaskScreenTest {
         composeRule.onNodeWithTag("btn_clear_completed").assertIsNotEnabled()
     }
 
+    @Test
+    fun 마감이_임박한_항목에_문구가_붙고_없으면_안_붙는다() {
+        val today = LocalDate.now(ZoneId.systemDefault())
+        setContent(
+            TaskUiState(
+                tasks = listOf(
+                    Task(
+                        id = 1,
+                        title = "오늘 마감",
+                        priority = Priority.NORMAL,
+                        done = false,
+                        order = 0,
+                        dueDate = today.atStartOfDay(ZoneId.systemDefault())
+                            .toInstant().toEpochMilli(),
+                    ),
+                    Task(id = 2, title = "마감 없음", priority = Priority.NORMAL, done = false, order = 1),
+                ),
+            ),
+        )
+
+        composeRule.onNodeWithTag("text_due_0").assertTextEquals("오늘")
+        composeRule.onNodeWithTag("text_due_1").assertDoesNotExist()
+    }
+
+    @Test
+    fun 완료한_항목은_마감이_지났어도_문구가_붙지_않는다() {
+        val yesterday = LocalDate.now(ZoneId.systemDefault()).minusDays(1)
+        setContent(
+            TaskUiState(
+                tasks = listOf(
+                    Task(
+                        id = 1,
+                        title = "끝낸 일",
+                        priority = Priority.NORMAL,
+                        done = true,
+                        order = 0,
+                        dueDate = yesterday.atStartOfDay(ZoneId.systemDefault())
+                            .toInstant().toEpochMilli(),
+                    ),
+                ),
+            ),
+        )
+
+        composeRule.onNodeWithTag("text_due_0").assertDoesNotExist()
+    }
+
+    @Test
+    fun 마감_칩을_누르면_onDueChange_로_전달된다() {
+        var selected: DueOption? = null
+        setContent(TaskUiState(), onDueChange = { selected = it })
+
+        composeRule.onNodeWithTag("btn_due_tomorrow").performClick()
+
+        assertEquals(DueOption.TOMORROW, selected)
+    }
+
     private fun setContent(
         state: TaskUiState,
         onTitleChange: (String) -> Unit = {},
+        onDueChange: (DueOption) -> Unit = {},
         onAddClick: () -> Unit = {},
         onToggle: (Long) -> Unit = {},
         onDelete: (Long) -> Unit = {},
@@ -129,6 +189,7 @@ class TaskScreenTest {
                 state = state,
                 onTitleChange = onTitleChange,
                 onPriorityChange = {},
+                onDueChange = onDueChange,
                 onAddClick = onAddClick,
                 onToggle = onToggle,
                 onDelete = onDelete,

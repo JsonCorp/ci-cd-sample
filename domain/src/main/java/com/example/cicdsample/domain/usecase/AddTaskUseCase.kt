@@ -31,6 +31,7 @@ class AddTaskUseCase @Inject constructor(
     suspend operator fun invoke(
         rawTitle: String,
         priority: Priority = Priority.NORMAL,
+        dueDate: Long? = null,
     ): Result<Task> {
         val title = rawTitle.trim()
 
@@ -43,7 +44,7 @@ class AddTaskUseCase @Inject constructor(
             return failure(TitleError.DUPLICATE)
         }
 
-        return Result.success(repository.addTask(title, priority))
+        return Result.success(repository.addTask(title, priority, dueDate))
     }
 
     private fun failure(reason: TitleError): Result<Task> =

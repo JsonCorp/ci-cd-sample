@@ -26,7 +26,7 @@ ci-cd-sample/
 │   ├── workflows/release.yml  v* 태그 → 검증 → 서명 릴리스
 │   ├── pull_request_template.md
 │   └── dependabot.yml
-├── docs/         아키텍처 문서(+PPTX)·블로그 글
+├── docs/         아키텍처 문서(+PPTX)·앱 사용 설명서·블로그 글
 └── scripts/      run-tests.sh / run-tests.ps1 — 로컬 3단 검증 한 번에
 ```
 
@@ -114,6 +114,8 @@ Gradle 캐시 적중 전에는 각각 3분 02초 / 3분 31초였다.
 
 ## 문서
 
+- [앱 사용 설명서](docs/manual.html) — 입력 규칙·우선순위·마감일·정렬 순서
+  (HTML 파일이라 GitHub 에서는 소스로 보인다. 내려받아 브라우저로 열면 된다)
 - [아키텍처 분석](docs/ARCHITECTURE.md) (+ `docs/ci-cd-sample-아키텍처분석.pptx`)
 - [블로그 — 테스트 가능한 구조가 먼저다](docs/blog/testable-architecture-and-ci-cd-pipeline.md)
 - [Maestro 플로우 규칙](.maestro/README.md)

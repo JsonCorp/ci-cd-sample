@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.kover)
 }
 
 android {
@@ -33,4 +34,13 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
+}
+
+kover {
+    currentProject {
+        // debug 변형만 집계한다 → testDebugUnitTest 만 돌고 release 유닛테스트는 건드리지 않는다.
+        createVariant("custom") {
+            add("debug")
+        }
+    }
 }

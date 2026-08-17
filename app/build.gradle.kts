@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.kover)
 }
 
 // ── 릴리스 서명 ────────────────────────────────────────────────────────────────
@@ -132,4 +133,13 @@ dependencies {
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
+}
+
+kover {
+    currentProject {
+        // debug 변형만 집계한다 → testDebugUnitTest 만 돌고 release 유닛테스트는 건드리지 않는다.
+        createVariant("custom") {
+            add("debug")
+        }
+    }
 }

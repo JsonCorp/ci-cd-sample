@@ -86,6 +86,49 @@ jobs:
           done
           echo "| **합계** | **$total** | **$failed** | |" >> "$GITHUB_STEP_SUMMARY"
 
+      # 앞 스텝에서 테스트가 이미 돌았으므로 리포트 생성만 한다(테스트는 up-to-date).
+      # 계측 테스트(GMD/Maestro)는 Kover 가 수집하지 못한다 — 이 수치는 단위 테스트만의 것이다.
+      - name: 커버리지 리포트
+        if: ${{ !cancelled() }}
+        run: ./gradlew :koverXmlReportCustom :koverHtmlReportCustom
+
+      - name: 커버리지를 요약에 적기
+        if: ${{ !cancelled() }}
+        run: |
+          report=build/reports/kover/reportCustom.xml
+          if [ ! -f "$report" ]; then
+            echo "::warning::커버리지 리포트가 없습니다: $report"
+            exit 0
+          fi
+          # <counter> 는 package/class/method 안에도 중첩돼 나온다.
+          # 합계는 <report> 의 '직계 자식' 뿐이라 grep 이 아니라 XML 파서로 뽑는다.
+          python3 - "$report" >> "$GITHUB_STEP_SUMMARY" <<'PYEOF'
+          import sys, xml.etree.ElementTree as ET
+          root = ET.parse(sys.argv[1]).getroot()
+
+          def stat(kind):
+              c = root.find(f'counter[@type="{kind}"]')
+              if c is None:
+                  return None
+              missed, covered = int(c.get('missed')), int(c.get('covered'))
+              total = missed + covered
+              if total == 0:
+                  return None
+              return covered, total, 100.0 * covered / total
+
+          print("## 커버리지 (단위 테스트 기준)")
+          print()
+          print("| 항목 | 커버 | 전체 | 비율 |")
+          print("|---|---:|---:|---:|")
+          for label, kind in (("라인", "LINE"), ("분기", "BRANCH"),
+                              ("메서드", "METHOD"), ("클래스", "CLASS")):
+              r = stat(kind)
+              if r:
+                  print(f"| {label} | {r[0]} | {r[1]} | **{r[2]:.1f}%** |")
+          print()
+          print("> 계측 테스트(Compose UI · Maestro)는 Kover 가 수집하지 못합니다.")
+          PYEOF
+
       - name: 리포트 보관
         if: always()
         uses: actions/upload-artifact@v7
@@ -94,6 +137,7 @@ jobs:
           path: |
             **/build/reports/tests/
             **/build/reports/lint-results-*.html
+            build/reports/kover/
           retention-days: 7
 
   # ── 2층: Compose UI 테스트 ────────────────────────────────────────────────

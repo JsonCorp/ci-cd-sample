@@ -212,7 +212,7 @@ Hilt 2.53.1 + KSP. `:domain` 은 **DI 프레임워크를 모른다** — 생성�
 
 | 잡 | 트리거 조건 | 캐시 | 산출물 |
 |----|-------------|------|--------|
-| `unit-test` | 항상 | `gradle/actions/setup-gradle` | 테스트·린트 HTML, Job Summary 집계표 |
+| `unit-test` | 항상 | `gradle/actions/setup-gradle` | 테스트·린트 HTML, Kover 커버리지, Job Summary 집계표 |
 | `ui-test` | 항상 | GMD 시스템 이미지 + AVD | `androidTests/` HTML 리포트 |
 | `build` | 항상 | `setup-gradle` | `app-debug.apk`, Job Summary APK 크기 |
 | `e2e` | `needs: [build, unit-test]` | AVD 스냅샷(`~/.android/avd`) | `report.html`, 실패 스크린샷 |
@@ -283,7 +283,7 @@ CI 워크플로는 시크릿을 **하나도 쓰지 않으므로** 포크 PR 에�
 | 영속화 | 메모리(`MutableStateFlow`) | 파이프라인이 주제라 Room 제외. 붙여도 `TaskRepository` 는 그대로 |
 | 정적 분석 | Android Lint (`lintDebug`) | detekt/ktlint 는 플러그인 버전 리스크로 보류. `:domain` 은 순수 JVM 이라 Lint 대상 밖이다 |
 | 공급망 | wrapper 검증 + dependency-submission/review | 커밋된 wrapper jar 무결성, 취약 의존성 유입 차단, Dependabot 알림. 포크 PR 은 토큰 제약으로 제외 |
-| 커버리지 | 없음 | Kover(JetBrains 공식) 도입 검토 중. 테스트 개수만 Job Summary 에 나온다 |
+| 커버리지 | Kover 집계 리포트 | 세 모듈을 `custom` 변형으로 묶어 루트에서 하나로 낸다. 단위 테스트만 계측되고 계측 테스트는 빠진다 |
 | R8 검증 | 없음 | E2E 는 debug APK 로 돈다. 릴리스 전용 결함은 아직 못 잡는다 |
 | 캐시 | Gradle + AVD 스냅샷 | AVD 캐시 키를 API 레벨에 묶어 무효화 제어 |
 | 비용 | 공개 저장소 = Actions 무료 | `concurrency` 취소 + `needs` 로 낭비 차단 |
@@ -305,6 +305,7 @@ CI 워크플로는 시크릿을 **하나도 쓰지 않으므로** 포크 PR 에�
 |------|------|------|-----------|
 | v0.1.0 | 2026-07-26 | init | 3계층 샘플 앱, 3단 테스트, CI/CD 파이프라인 최초 정리 |
 | v0.1.1 | 2026-07-26 | fix | Actions 버전 4건 갱신(Node 20 경고 해소), CI 실측 시간 반영 |
+| v0.2.1 | 2026-08-14 | feat | Kover 커버리지 집계(`:koverXmlReportCustom`)와 Job Summary 연동. `:domain` 의 testFixtures 는 계측에서 제외 |
 | v0.2.0 | 2026-08-14 | feat | Compose UI 테스트를 GMD 로 CI 에 편입(3단 검증 실제 완성), 릴리스 전 `verify` 잡, wrapper 검증, dependency-review/submission, apksigner 검증 + SHA256SUMS, `e2e` 가 `unit-test` 도 대기, 포크 PR 알림 가드 |
 
 > **PPTX 동기화 시 위 표를 gen_pptx.py 의 revision_history() rows 와 일치시킬 것.**

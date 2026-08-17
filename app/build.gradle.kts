@@ -75,6 +75,24 @@ android {
         checkDependencies = true
     }
 
+    // ── 관리형 디바이스(Gradle Managed Devices) ────────────────────────────
+    // AVD 생성·부팅·종료를 Gradle 이 직접 한다. CI 에서 별도 에뮬레이터 액션 없이
+    //   ./gradlew :app:pixel6api30DebugAndroidTest
+    // 한 줄로 Compose UI 테스트를 돌릴 수 있다.
+    // aosp-atd 는 Google 이 테스트 전용으로 줄여 만든 이미지라 google_apis 보다 부팅이 빠르다
+    // (Play 서비스가 빠져 있지만, 이 앱의 UI 테스트는 필요로 하지 않는다).
+    testOptions {
+        managedDevices {
+            localDevices {
+                create("pixel6api30") {
+                    device = "Pixel 6"
+                    apiLevel = 30
+                    systemImageSource = "aosp-atd"
+                }
+            }
+        }
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"

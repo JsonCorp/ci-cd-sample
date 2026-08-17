@@ -22,11 +22,12 @@ ci-cd-sample/
 ├── domain/       순수 Kotlin(JVM)    — Model, Repository 인터페이스, UseCase
 ├── .maestro/     E2E 플로우 5개 + common/ 서브플로우
 ├── .github/
-│   ├── workflows/ci.yml       PR·push 검증 (단위·린트 / 빌드 / E2E)
-│   ├── workflows/release.yml  v* 태그 → 서명 릴리스
+│   ├── workflows/ci.yml       PR·push 검증 (단위·린트 / UI / 빌드 / E2E / 공급망)
+│   ├── workflows/release.yml  v* 태그 → 검증 → 서명 릴리스
+│   ├── pull_request_template.md
 │   └── dependabot.yml
 ├── docs/         아키텍처 문서(+PPTX)·블로그 글
-└── scripts/run-tests.ps1      로컬 3단 검증 한 번에
+└── scripts/      run-tests.sh / run-tests.ps1 — 로컬 3단 검증 한 번에
 ```
 
 의존 방향은 `:app → :data → :domain` 한 방향뿐이다. `:domain` 은 Android 도, DI 프레임워크도 모른다.
@@ -46,26 +47,56 @@ ci-cd-sample/
 | 티어 | 위치 | 개수 | 어디서 도나 |
 |---|---|---:|---|
 | 단위 테스트 | `domain/src/test`, `data/src/test`, `app/src/test` | 44 | JVM (에뮬레이터 불필요) |
-| Compose UI 테스트 | `app/src/androidTest` | 8 | 기기/에뮬레이터 |
+| Compose UI 테스트 | `app/src/androidTest` | 8 | 관리형 디바이스(GMD) |
 | Maestro E2E | `.maestro/` | 5 | 기기/에뮬레이터 |
+
+세 티어 모두 CI 에서 돈다. 관리형 디바이스를 쓰므로 UI 테스트는 에뮬레이터를 미리 띄울 필요가 없다.
 
 ## 빠른 시작
 
-```powershell
+```bash
 # 단위 테스트 + 린트 (기기 없이)
-.\gradlew.bat :domain:test :data:testDebugUnitTest :app:testDebugUnitTest lintDebug
+./gradlew :domain:test :data:testDebugUnitTest :app:testDebugUnitTest lintDebug
 
-# 기기 연결 후, 설치 + E2E + HTML 리포트까지 한 번에
+# Compose UI 테스트 (관리형 디바이스 — 에뮬레이터를 미리 띄울 필요 없음)
+./gradlew :app:pixel6api30DebugAndroidTest
+
+# 3단 전부 한 번에 (macOS / Linux)
+./scripts/run-tests.sh          # 기기 없으면 SKIP_E2E=1 ./scripts/run-tests.sh
+```
+
+```powershell
+# Windows
 powershell -ExecutionPolicy Bypass -File scripts\run-tests.ps1
 ```
 
 ## CI/CD
 
-- **`ci.yml`** — `unit-test` 와 `build` 가 병렬로 돌고, `e2e` 는 `build` 가 만든 APK 아티팩트를
+- **`ci.yml`** — `unit-test` · `ui-test` · `build` 가 병렬로 돌고, `e2e` 는 `build` 가 만든 APK 아티팩트를
   내려받아 에뮬레이터에서 실행한다. 빌드 실패와 에뮬레이터 실패가 섞이지 않는다.
   Gradle 캐시(`gradle/actions/setup-gradle`)와 AVD 스냅샷 캐시를 함께 쓴다.
-- **`release.yml`** — `v*` 태그를 밀면 태그와 `versionName` 이 같은지 확인하고, 시크릿의 키스토어로
-  서명한 APK/AAB 를 GitHub Releases 에 올린다. 시크릿이 없는 포크에서는 **서명을 건너뛰고 계속 진행**한다.
+  모든 빌드 잡은 `gradle-wrapper.jar` 무결성을 먼저 검증하고, PR 에는 `dependency-review` 가 붙는다.
+- **`release.yml`** — `v*` 태그를 밀면 먼저 단위 테스트·린트를 다시 돌리고(`verify`), 태그와 `versionName`
+  이 같은지 확인한 뒤, 시크릿의 키스토어로 서명한 APK/AAB 를 `SHA256SUMS` 와 함께 GitHub Releases 에
+  올린다. 게시 전 `apksigner verify` 로 서명이 실제로 붙었는지 확인한다.
+  시크릿이 없는 포크에서는 **서명을 건너뛰고 계속 진행**한다.
+
+### 브랜치 보호 설정
+
+파이프라인의 절반은 저장소 설정이다. **Settings → Branches → `main`** 에서 다음 상태 검사를
+required 로 걸어야 CI 가 게이트로 동작한다.
+
+| required check | 잡 |
+|---|---|
+| `단위 테스트 & 린트` | `unit-test` |
+| `Compose UI 테스트` | `ui-test` |
+| `디버그 APK 빌드` | `build` |
+| `Maestro E2E (에뮬레이터)` | `e2e` |
+
+`의존성 검토`(`dependency-review`)는 포크 PR 에서 그래프를 제출할 수 없어 건너뛰므로 required 로 걸지 않는다.
+같은 저장소 PR 에서는 정상 동작하며, 결과는 Checks 탭에서 볼 수 있다.
+
+태그 푸시는 브랜치 보호를 우회하므로, `release.yml` 이 자체 `verify` 잡으로 같은 검증을 다시 돈다.
 
 실측(2026-07-26): `unit-test` 1분 10초 · `build` 1분 08초(병렬) · `e2e` 5분 06초 → 전체 6분 16초.
 Gradle 캐시 적중 전에는 각각 3분 02초 / 3분 31초였다.

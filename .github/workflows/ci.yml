@@ -30,6 +30,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # 저장소에 커밋된 gradle-wrapper.jar 가 정품 배포본인지 확인한다.
+      # setup-gradle 이 자동으로 해주지 않는다 — 별도 액션이고, 비용은 10초 미만이다.
+      - name: Gradle Wrapper 검증
+        uses: gradle/actions/wrapper-validation@v6
+
       - name: JDK 17 준비
         uses: actions/setup-java@v5
         with:
@@ -44,12 +49,24 @@ jobs:
       - name: 단위 테스트
         run: ./gradlew :domain:test :data:testDebugUnitTest :app:testDebugUnitTest
 
+      # 테스트가 깨져도 린트는 돈다. 한 번의 푸시로 고쳐야 할 것을 전부 보여준다.
+      # always() 는 취소된 실행에서도 참이라 cancel-in-progress 와 함께 쓰면 헛돈다.
       - name: 린트
+        if: ${{ !cancelled() }}
         run: ./gradlew lintDebug
 
       - name: 테스트 집계를 요약에 적기
         if: always()
         run: |
+          # grep 결과가 비면 paste 가 빈 문자열을 넘겨 bc 가 조용히 실패한다.
+          # 합계 함수로 감싸 0 을 기본값으로 돌려준다.
+          sum_attr() {
+            local attr="$1"; shift
+            local expr
+            expr=$(grep -ho "$attr=\"[0-9]*\"" "$@" 2>/dev/null | grep -o '[0-9]*' | paste -sd+)
+            if [ -z "$expr" ]; then echo 0; else echo "$expr" | bc; fi
+          }
+
           {
             echo "## 단위 테스트 결과"
             echo ""
@@ -59,11 +76,11 @@ jobs:
 
           total=0; failed=0
           for module in domain data app; do
-            files=$(find "$module" -path "*test-results*" -name "TEST-*.xml" 2>/dev/null || true)
-            [ -z "$files" ] && continue
-            t=$(grep -ho 'tests="[0-9]*"' $files | grep -o '[0-9]*' | paste -sd+ | bc)
-            f=$(grep -ho 'failures="[0-9]*"' $files | grep -o '[0-9]*' | paste -sd+ | bc)
-            s=$(grep -ho 'skipped="[0-9]*"' $files | grep -o '[0-9]*' | paste -sd+ | bc)
+            mapfile -t files < <(find "$module" -path "*test-results*" -name "TEST-*.xml" 2>/dev/null)
+            [ "${#files[@]}" -eq 0 ] && continue
+            t=$(sum_attr tests "${files[@]}")
+            f=$(sum_attr failures "${files[@]}")
+            s=$(sum_attr skipped "${files[@]}")
             echo "| \`:$module\` | $t | $f | $s |" >> "$GITHUB_STEP_SUMMARY"
             total=$((total + t)); failed=$((failed + f))
           done
@@ -79,6 +96,76 @@ jobs:
             **/build/reports/lint-results-*.html
           retention-days: 7
 
+  # ── 2층: Compose UI 테스트 ────────────────────────────────────────────────
+  # Gradle Managed Devices(GMD) 로 AVD 를 Gradle 이 직접 관리한다.
+  # unit-test·build 와 병렬로 돌므로 전체 파이프라인 시간은 늘지 않는다.
+  # aosp-atd 는 테스트 전용 경량 이미지라 부팅이 google_apis 보다 눈에 띄게 빠르다.
+  ui-test:
+    name: Compose UI 테스트
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Gradle Wrapper 검증
+        uses: gradle/actions/wrapper-validation@v6
+
+      - name: JDK 17 준비
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Gradle 설정 및 캐시
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: KVM 권한 열기 (에뮬레이터 하드웨어 가속)
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # GMD 는 시스템 이미지를 직접 내려받는데, 러너는 자기가 미리 설치해 둔 패키지의
+      # 라이선스만 수락해 놓는다. aosp-atd 이미지는 거기 없어서 pixel6api30Setup 이
+      # LicenceNotAcceptedException 으로 죽는다. (E2E 잡은 android-emulator-runner 가
+      # 라이선스를 대신 수락해 주기 때문에 이 문제를 겪지 않는다.)
+      - name: Android SDK 라이선스 수락
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$sdkmanager" ]; then
+            echo "::error::sdkmanager 를 찾지 못했습니다: $sdkmanager"
+            exit 1
+          fi
+          # 동의를 다 받으면 sdkmanager 가 stdin 을 닫아 yes 가 SIGPIPE 로 죽는다.
+          # pipefail 이 켜져 있으면 이게 스텝 실패로 잡히므로 파이프 종료코드를 무시한다.
+          yes | "$sdkmanager" --licenses > /dev/null 2>&1 || true
+          # 조용히 실패하면 GMD 스텝에 가서야 터진다. 여기서 바로 확인한다.
+          if [ ! -f "$ANDROID_HOME/licenses/android-sdk-license" ]; then
+            echo "::error::라이선스 수락에 실패했습니다"
+            exit 1
+          fi
+          echo "수락된 라이선스: $(ls "$ANDROID_HOME/licenses" | tr '\n' ' ')"
+
+      # GMD 시스템 이미지는 캐시하지 않는다.
+      # 캐시를 복원하면 pixel6api30Setup 이 "Cannot query the value of this property
+      # because it has no value available" 로 죽는다 — 다른 런너에서 만들어진 AVD 상태를
+      # AGP 가 다시 해석하지 못한다. 캐시 miss 는 통과하고 hit 는 실패하는 것을 확인했다.
+      # 게다가 이 캐시는 파이프라인 시간을 줄이지도 않는다. 임계 경로는 e2e 이고
+      # (build·unit-test 를 기다렸다가 시작한다), ui-test 는 이미지를 매번 받아도
+      # 5분대에 끝나 e2e 보다 먼저 완료된다. 이미지 다운로드는 약 400MB / 2~3분이다.
+      - name: connectedAndroidTest (관리형 디바이스)
+        run: ./gradlew :app:pixel6api30DebugAndroidTest
+
+      - name: UI 테스트 리포트 보관
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-test-reports
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+          retention-days: 7
+
   # ── 2층: 디버그 APK 빌드 ──────────────────────────────────────────────────
   # 단위 테스트와 병렬로 돈다. 여기서 만든 APK 를 E2E 잡이 그대로 내려받아 쓴다.
   build:
@@ -87,6 +174,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+
+      - name: Gradle Wrapper 검증
+        uses: gradle/actions/wrapper-validation@v6
 
       - name: JDK 17 준비
         uses: actions/setup-java@v5
@@ -121,10 +211,11 @@ jobs:
 
   # ── 3층: 에뮬레이터 E2E ───────────────────────────────────────────────────
   # 가장 느리고 가장 잘 깨지는 잡. 앞 단계가 실패하면 아예 돌지 않도록 needs 로 묶는다.
+  # unit-test 가 깨진 채로 에뮬레이터를 5분 태우지 않는다.
   e2e:
     name: Maestro E2E (에뮬레이터)
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, unit-test]
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
@@ -147,6 +238,7 @@ jobs:
           echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
 
       # AVD 생성에만 2~3분이 든다. 스냅샷을 캐시하면 두 번째 실행부터 부팅이 크게 짧아진다.
+      # 키에 연월을 넣어 시스템 이미지 리비전이 바뀌면 자연히 새로 만들어지게 한다.
       - name: AVD 캐시
         uses: actions/cache@v4
         id: avd-cache
@@ -154,7 +246,9 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-api30-google_apis-x86_64
+          # restore-keys 를 두면 접두사 매칭으로 지난달의 낡은 AVD 가 복원되고,
+          # force-avd-creation: false 가 그걸 그대로 재사용해 날짜 키가 무의미해진다.
+          key: avd-api30-google_apis-x86_64-2026-08
 
       - name: AVD 스냅샷 만들기 (캐시가 없을 때만)
         if: steps.avd-cache.outputs.cache-hit != 'true'
@@ -177,13 +271,27 @@ jobs:
           arch: x86_64
           profile: pixel_6
           force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          # -no-snapshot-load 로 콜드 부팅을 강제한다. 스냅샷을 로드하면 저장 시점의
+          # sys.boot_completed=1 이 그대로 복원돼, 액션의 부팅 대기(getprop 폴링)가
+          # 시스템 서비스가 뜨기도 전에 즉시 통과한다. 그 직후 액션이 무조건 실행하는
+          # `adb shell input keyevent 82` 가 "No service published for: input" 으로 죽는다.
+          # 액션 내부 동작이라 워크플로에서 앞에 대기를 끼워넣을 수 없다.
+          # AVD 캐시는 그대로 둔다 — 비싼 건 스냅샷이 아니라 AVD 생성(2~3분)이다.
+          emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           # script 는 sh -c 로 통째로 넘어간다. 백슬래시 줄바꿈을 쓰면 `\` 가 인자로 남아
           # "Flow path does not exist: \" 로 실패한다 — 긴 명령도 한 줄로 쓴다.
           # --flatten-debug-output: 실패 스크린샷을 타임스탬프 폴더 없이 한곳에 모아
           # 아티팩트에서 바로 찾을 수 있게 한다.
+          #
+          # 설치 전에 uninstall 을 한 번 태운다. 캐시된 AVD 의 userdata 에는 캐시를 만든
+          # 실행이 설치해 둔 앱이 남아 있는데, 디버그 키스토어는 런너마다 새로 생성되므로
+          # 서명이 달라 INSTALL_FAILED_UPDATE_INCOMPATIBLE 로 거부된다.
+          # 덤으로 앱 데이터도 지워져 플로우가 매번 같은 상태에서 시작한다.
+          # 액션은 script 를 줄 단위로 sh -c 에 넘기고 실패 시 즉시 멈추므로,
+          # 미설치 상태에서 uninstall 이 1 을 반환하는 것을 `|| true` 로 흡수한다.
           script: |
+            adb uninstall com.example.cicdsample || true
             adb install -r artifacts/app-debug.apk
             mkdir -p reports
             maestro test .maestro/ --format HTML-DETAILED --output reports/report.html --debug-output reports/debug --flatten-debug-output
@@ -196,18 +304,71 @@ jobs:
           path: reports/
           retention-days: 7
 
+  # ── 공급망: 의존성 그래프 제출 ────────────────────────────────────────────
+  # GitHub 의 의존성 그래프는 Gradle 을 네이티브로 파싱하지 못한다(Maven 의 pom.xml 과 다르다).
+  # 스냅샷을 제출해야 (a) Dependabot 취약점 *알림* 이 켜지고,
+  # (b) dependency-review 가 base↔head 를 비교할 대상이 생긴다.
+  # PR head 에도 제출하지 않으면 dependency-review 는 변경 없음으로 보고 항상 통과한다.
+  # 포크 PR 은 토큰이 읽기 전용이라 제출할 수 없다 — 그 경우 검토 잡도 함께 건너뛴다.
+  dependency-submission:
+    name: 의존성 그래프 제출
+    runs-on: ubuntu-latest
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/dependency-submission@v6
+        with:
+          # 실제로 APK 에 실리는 것만 그래프에 담는다.
+          # 기본값은 buildscript 클래스패스까지 훑어서, AGP 가 apksigner 때문에 끌고 오는
+          # bouncycastle 같은 빌드 도구 의존성이 dependency-review 를 막는다.
+          # (bcprov-jdk18on 1.77 의 critical 권고 — :app:releaseRuntimeClasspath 에는 없다)
+          # :app/:data 는 releaseRuntimeClasspath, 순수 JVM 인 :domain 은 runtimeClasspath.
+          dependency-graph-include-configurations: "^(releaseRuntimeClasspath|runtimeClasspath)$"
+
+  # ── 공급망: PR 로 새로 들어오는 취약 의존성 차단 ──────────────────────────
+  dependency-review:
+    name: 의존성 검토
+    runs-on: ubuntu-latest
+    needs: dependency-submission
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      # PR 코멘트 요약은 pull-requests: write 가 필요하다. 상태 검사와 잡 로그로 충분하므로 켜지 않는다.
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
   # ── 실패를 사람에게 알리기 ────────────────────────────────────────────────
   # 외부 서비스나 시크릿 없이 GITHUB_TOKEN 만으로 동작한다.
+  # 포크에서 온 PR 의 GITHUB_TOKEN 은 읽기 전용이라 permissions 를 적어도 승격되지 않는다.
+  # 같은 저장소에서 온 PR 로 한정하고, 알림 실패가 CI 결론을 흐리지 않게 continue-on-error 를 건다.
   notify:
     name: 실패 시 PR 코멘트
     runs-on: ubuntu-latest
-    needs: [unit-test, build, e2e]
-    if: failure() && github.event_name == 'pull_request'
+    needs: [unit-test, ui-test, build, e2e, dependency-review]
+    if: >-
+      failure() &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       contents: read
       pull-requests: write
     steps:
       - uses: actions/github-script@v7
+        continue-on-error: true
         with:
           script: |
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
@@ -216,6 +377,7 @@ jobs:
               '',
               `- 실행 로그: ${runUrl}`,
               '- 단위 테스트/린트 리포트: Artifacts → `unit-test-and-lint-reports`',
+              '- Compose UI 테스트 리포트: Artifacts → `ui-test-reports`',
               '- E2E 실패 스크린샷: Artifacts → `maestro-report` (`reports/report.html`, `reports/debug/`)',
             ].join('\n');
             await github.rest.issues.createComment({

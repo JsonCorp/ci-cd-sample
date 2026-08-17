@@ -167,7 +167,7 @@ Hilt 2.53.1 + KSP. `:domain` 은 **DI 프레임워크를 모른다** — 생성�
 | 단위 | `domain/src/test` | 28 | JVM | 검증·정렬·집계 규칙 | 0.4초 |
 | 단위 | `data/src/test` | 6 | JVM | id 발급, Flow 재방출 | 1초 미만 |
 | 단위 | `app/src/test` | 10 | JVM | 상태 조립, 에러 문구 | 1초 미만 |
-| Compose UI | `app/src/androidTest` | 8 | 기기/에뮬레이터 | 렌더링, 콜백 배선 | 2분 36초 |
+| Compose UI | `app/src/androidTest` | 8 | 관리형 디바이스(GMD) | 렌더링, 콜백 배선 | 2분 36초 |
 | E2E | `.maestro/` | 5 | 기기/에뮬레이터 | 실제 앱 전체 흐름 | 1분 57초 |
 
 핵심 설계 결정 두 가지.
@@ -182,21 +182,29 @@ Hilt 2.53.1 + KSP. `:domain` 은 **DI 프레임워크를 모른다** — 생성�
 ```
   PR / push(main) / 수동
         │
-        ├──────────────────────┬──────────────────────────────┐
-        ▼                      ▼                              │
-  ┌─────────────┐       ┌─────────────┐                       │
-  │ unit-test   │       │ build       │   ← 두 잡은 병렬       │
-  │ 단위+린트    │       │assembleDebug│                       │
-  │ ~3분        │       │ ~3분30초    │                       │
-  └──────┬──────┘       └──────┬──────┘                       │
-         │                     │ app-debug-apk (artifact)     │
-         │                     ▼                              │
-         │              ┌─────────────────┐                   │
-         │              │ e2e             │  needs: build     │
-         │              │ 에뮬레이터+Maestro│                  │
-         │              └────────┬────────┘                   │
-         ▼                       ▼                            ▼
-   test/lint 리포트        maestro-report            실패 시 PR 코멘트
+        │  (모든 빌드 잡은 gradle-wrapper.jar 무결성 검증부터)
+        ├───────────────┬───────────────┬──────────────┐
+        ▼               ▼               ▼              │
+  ┌───────────┐   ┌───────────┐   ┌───────────┐        │
+  │ unit-test │   │ ui-test   │   │ build     │ ← 세 잡 병렬
+  │ 단위+린트  │   │ Compose   │   │assembleDbg│        │
+  │           │   │ GMD       │   │           │        │
+  └─────┬─────┘   └─────┬─────┘   └─────┬─────┘        │
+        │               │               │ app-debug-apk (artifact)
+        └───────┬───────┴───────────────┤              │
+                │                       ▼              │
+                │              ┌─────────────────┐     │
+                │              │ e2e             │ needs: [build, unit-test]
+                │              │ 에뮬레이터+Maestro│    │
+                │              └────────┬────────┘     │
+                ▼                       ▼              ▼
+        test/lint·UI 리포트       maestro-report   실패 시 PR 코멘트
+                                                  (같은 저장소 PR 한정)
+
+  dependency-submission → dependency-review
+    GitHub 의존성 그래프는 Gradle 을 네이티브로 파싱하지 못한다.
+    PR head 에도 스냅샷을 제출해야 base 와 비교할 대상이 생긴다.
+    포크 PR 은 토큰이 읽기 전용이라 둘 다 건너뛴다.
 ```
 
 실측(2026-07-26, 캐시 적중): `unit-test` 1분 10초 · `build` 57초(병렬) · `e2e` 4분 35초 → 전체 **5분 42초**.
@@ -205,16 +213,32 @@ Hilt 2.53.1 + KSP. `:domain` 은 **DI 프레임워크를 모른다** — 생성�
 | 잡 | 트리거 조건 | 캐시 | 산출물 |
 |----|-------------|------|--------|
 | `unit-test` | 항상 | `gradle/actions/setup-gradle` | 테스트·린트 HTML, Job Summary 집계표 |
-| `build` | 항상 | 위와 동일 | `app-debug.apk`, Job Summary APK 크기 |
-| `e2e` | `needs: build` | AVD 스냅샷(`~/.android/avd`) | `report.html`, 실패 스크린샷 |
-| `notify` | `failure()` && PR | — | PR 코멘트(GITHUB_TOKEN 만) |
+| `ui-test` | 항상 | GMD 시스템 이미지 + AVD | `androidTests/` HTML 리포트 |
+| `build` | 항상 | `setup-gradle` | `app-debug.apk`, Job Summary APK 크기 |
+| `e2e` | `needs: [build, unit-test]` | AVD 스냅샷(`~/.android/avd`) | `report.html`, 실패 스크린샷 |
+| `dependency-submission` | `main` push + 같은 저장소 PR | — | 의존성 그래프(→ Dependabot 알림, 검토 비교 대상) |
+| `dependency-review` | 같은 저장소 PR | — | 취약 의존성 차단(high 이상) |
+| `notify` | `failure()` && 같은 저장소 PR | — | PR 코멘트(GITHUB_TOKEN 만) |
 
 설계 의도.
 
 - **E2E 는 APK 를 다시 빌드하지 않는다.** `build` 잡의 아티팩트를 내려받아 설치한다 →
   빌드 실패와 에뮬레이터 실패가 로그에서 섞이지 않는다.
+- **Compose UI 테스트는 관리형 디바이스(GMD)로 돈다.** AVD 생성·부팅·종료를 Gradle 이 맡으므로
+  에뮬레이터 액션에 의존하지 않고, `unit-test`·`build` 와 병렬이라 전체 시간이 늘지 않는다.
+  이미지는 `aosp-atd`(테스트 전용 경량본)를 쓴다.
+- **`e2e` 는 `unit-test` 도 기다린다.** 로직이 깨진 채로 에뮬레이터를 5분 태우지 않는다.
+- **린트는 `if: always()`** — 단위 테스트가 실패해도 린트 결과를 함께 보여준다. 왕복이 한 번 줄어든다.
 - `concurrency: cancel-in-progress` — 같은 브랜치에 새 커밋이 오면 이전 실행을 취소한다.
 - `paths-ignore` 는 **push 에만** 건다. PR 에서는 항상 돌아 상태 검사가 비지 않는다.
+- **포크 PR 의 `GITHUB_TOKEN` 은 읽기 전용이다.** `permissions` 를 적어도 승격되지 않으므로
+  `notify` 는 같은 저장소에서 온 PR 로 한정하고 `continue-on-error` 를 건다.
+
+### 필수 상태 검사
+
+파이프라인의 절반은 저장소 설정이다. `main` 브랜치 보호에서 `단위 테스트 & 린트`,
+`Compose UI 테스트`, `디버그 APK 빌드`, `Maestro E2E (에뮬레이터)`, `의존성 검토` 를
+required 로 걸어야 위 잡들이 실제 게이트가 된다. 워크플로 파일만으로는 아무것도 막지 못한다.
 
 ## 09. CD 파이프라인
 
@@ -223,17 +247,22 @@ Hilt 2.53.1 + KSP. `:domain` 은 **DI 프레임워크를 모른다** — 생성�
         │
         ▼
   ┌───────────────────────────────────────────────────────┐
+  │ 0. verify 잡: 단위 테스트 + 린트  ← 태그는 브랜치 보호를 │
+  │              우회하는 경로라 여기서 다시 막는다          │
+  ├───────────────────────────────────────────────────────┤
   │ 1. 태그 ↔ versionName 일치 확인   ← 다르면 즉시 실패    │
   │ 2. 키스토어 준비                                       │
   │      시크릿 있음 → runner.temp 에 base64 디코드         │
   │      시크릿 없음 → 서명 건너뜀(실패 아님)               │
   │ 3. VERSION_CODE = github.run_number                    │
   │ 4. assembleRelease + bundleRelease (R8 축소)           │
-  │ 5. gh release create --generate-notes                  │
+  │ 5. apksigner verify  ← 서명이 실제로 붙었는지 확인       │
+  │ 6. sha256sum → SHA256SUMS                              │
+  │ 7. 릴리스가 있으면 upload --clobber, 없으면 create      │
   └───────────────────────────────────────────────────────┘
         │
         ▼
-  GitHub Releases: ci-cd-sample-0.1.0.apk / .aab
+  GitHub Releases: ci-cd-sample-0.1.0.apk / .aab / SHA256SUMS
 ```
 
 | 시크릿 | 내용 | 사용처 |
@@ -252,7 +281,10 @@ CI 워크플로는 시크릿을 **하나도 쓰지 않으므로** 포크 PR 에�
 | 항목 | 현재 | 근거 / 확장 방향 |
 |------|------|------------------|
 | 영속화 | 메모리(`MutableStateFlow`) | 파이프라인이 주제라 Room 제외. 붙여도 `TaskRepository` 는 그대로 |
-| 정적 분석 | Android Lint (`lintDebug`) | detekt/ktlint 는 플러그인 버전 리스크로 보류 |
+| 정적 분석 | Android Lint (`lintDebug`) | detekt/ktlint 는 플러그인 버전 리스크로 보류. `:domain` 은 순수 JVM 이라 Lint 대상 밖이다 |
+| 공급망 | wrapper 검증 + dependency-submission/review | 커밋된 wrapper jar 무결성, 취약 의존성 유입 차단, Dependabot 알림. 포크 PR 은 토큰 제약으로 제외 |
+| 커버리지 | 없음 | Kover(JetBrains 공식) 도입 검토 중. 테스트 개수만 Job Summary 에 나온다 |
+| R8 검증 | 없음 | E2E 는 debug APK 로 돈다. 릴리스 전용 결함은 아직 못 잡는다 |
 | 캐시 | Gradle + AVD 스냅샷 | AVD 캐시 키를 API 레벨에 묶어 무효화 제어 |
 | 비용 | 공개 저장소 = Actions 무료 | `concurrency` 취소 + `needs` 로 낭비 차단 |
 | 의존성 갱신 | Dependabot (gradle 주간 / actions 월간) | actions 4건 병합 완료. gradle 5건은 `compileSdk 37` 요구로 보류 |
@@ -273,5 +305,6 @@ CI 워크플로는 시크릿을 **하나도 쓰지 않으므로** 포크 PR 에�
 |------|------|------|-----------|
 | v0.1.0 | 2026-07-26 | init | 3계층 샘플 앱, 3단 테스트, CI/CD 파이프라인 최초 정리 |
 | v0.1.1 | 2026-07-26 | fix | Actions 버전 4건 갱신(Node 20 경고 해소), CI 실측 시간 반영 |
+| v0.2.0 | 2026-08-14 | feat | Compose UI 테스트를 GMD 로 CI 에 편입(3단 검증 실제 완성), 릴리스 전 `verify` 잡, wrapper 검증, dependency-review/submission, apksigner 검증 + SHA256SUMS, `e2e` 가 `unit-test` 도 대기, 포크 PR 알림 가드 |
 
 > **PPTX 동기화 시 위 표를 gen_pptx.py 의 revision_history() rows 와 일치시킬 것.**

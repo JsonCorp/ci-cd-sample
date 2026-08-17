@@ -37,7 +37,9 @@ kover {
                     // Hilt / Dagger 생성물
                     "*.Hilt_*",
                     "*.Dagger*",
-                    "*_HiltModules", "*_HiltModules$*",
+                    // Hilt 는 중첩 모듈을 "$" 가 아니라 "_" 로 이어붙인 최상위 클래스로 낸다
+                    // (TaskViewModel_HiltModules_KeyModule_ProvideFactory). "_*" 가 없으면 새어나간다.
+                    "*_HiltModules", "*_HiltModules$*", "*_HiltModules_*",
                     "*_Factory", "*_Factory$*",
                     "*_MembersInjector",
                     "*_GeneratedInjector",

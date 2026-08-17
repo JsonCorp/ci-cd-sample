@@ -125,6 +125,27 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      # GMD 는 시스템 이미지를 직접 내려받는데, 러너는 자기가 미리 설치해 둔 패키지의
+      # 라이선스만 수락해 놓는다. aosp-atd 이미지는 거기 없어서 pixel6api30Setup 이
+      # LicenceNotAcceptedException 으로 죽는다. (E2E 잡은 android-emulator-runner 가
+      # 라이선스를 대신 수락해 주기 때문에 이 문제를 겪지 않는다.)
+      - name: Android SDK 라이선스 수락
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$sdkmanager" ]; then
+            echo "::error::sdkmanager 를 찾지 못했습니다: $sdkmanager"
+            exit 1
+          fi
+          # 동의를 다 받으면 sdkmanager 가 stdin 을 닫아 yes 가 SIGPIPE 로 죽는다.
+          # pipefail 이 켜져 있으면 이게 스텝 실패로 잡히므로 파이프 종료코드를 무시한다.
+          yes | "$sdkmanager" --licenses > /dev/null 2>&1 || true
+          # 조용히 실패하면 GMD 스텝에 가서야 터진다. 여기서 바로 확인한다.
+          if [ ! -f "$ANDROID_HOME/licenses/android-sdk-license" ]; then
+            echo "::error::라이선스 수락에 실패했습니다"
+            exit 1
+          fi
+          echo "수락된 라이선스: $(ls "$ANDROID_HOME/licenses" | tr '\n' ' ')"
+
       # actions/cache 의 path 는 러너의 OS 환경변수를 전개하지 않는다.
       # ${{ env.X }} 는 워크플로가 정의한 env 만 본다 — $GITHUB_ENV 로 한 번 실어 줘야 한다.
       - name: SDK 경로를 env 로 노출

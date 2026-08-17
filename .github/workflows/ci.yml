@@ -296,7 +296,13 @@ jobs:
           arch: x86_64
           profile: pixel_6
           force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          # -no-snapshot-load 로 콜드 부팅을 강제한다. 스냅샷을 로드하면 저장 시점의
+          # sys.boot_completed=1 이 그대로 복원돼, 액션의 부팅 대기(getprop 폴링)가
+          # 시스템 서비스가 뜨기도 전에 즉시 통과한다. 그 직후 액션이 무조건 실행하는
+          # `adb shell input keyevent 82` 가 "No service published for: input" 으로 죽는다.
+          # 액션 내부 동작이라 워크플로에서 앞에 대기를 끼워넣을 수 없다.
+          # AVD 캐시는 그대로 둔다 — 비싼 건 스냅샷이 아니라 AVD 생성(2~3분)이다.
+          emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           # script 는 sh -c 로 통째로 넘어간다. 백슬래시 줄바꿈을 쓰면 `\` 가 인자로 남아
           # "Flow path does not exist: \" 로 실패한다 — 긴 명령도 한 줄로 쓴다.
@@ -338,6 +344,13 @@ jobs:
           distribution: temurin
           java-version: "17"
       - uses: gradle/actions/dependency-submission@v6
+        with:
+          # 실제로 APK 에 실리는 것만 그래프에 담는다.
+          # 기본값은 buildscript 클래스패스까지 훑어서, AGP 가 apksigner 때문에 끌고 오는
+          # bouncycastle 같은 빌드 도구 의존성이 dependency-review 를 막는다.
+          # (bcprov-jdk18on 1.77 의 critical 권고 — :app:releaseRuntimeClasspath 에는 없다)
+          # :app/:data 는 releaseRuntimeClasspath, 순수 JVM 인 :domain 은 runtimeClasspath.
+          dependency-graph-include-configurations: "^(releaseRuntimeClasspath|runtimeClasspath)$"
 
   # ── 공급망: PR 로 새로 들어오는 취약 의존성 차단 ──────────────────────────
   dependency-review:

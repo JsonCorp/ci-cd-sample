@@ -1,7 +1,9 @@
 package com.example.cicdsample.ui
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -33,7 +35,18 @@ enum class AppTab(val label: String) {
 fun AppRoot(modifier: Modifier = Modifier) {
     var selected by rememberSaveable { mutableStateOf(AppTab.TASK) }
 
-    Column(modifier = modifier.fillMaxSize()) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            // targetSdk 35 부터 Android 는 앱을 edge-to-edge 로 그린다 — 인셋을 비우지 않으면
+            // 탭이 상태바 아래에 깔린다. 그림만 가려지는 것이 아니라 **터치가 상태바에 먹혀**
+            // 탭이 눌리지 않는다. API 30 에뮬레이터에서는 재현되지 않아 실단말 E2E 가 잡아낸 자리다.
+            //
+            // IME 인셋은 넣지 않는다. 창이 adjustResize 로 이미 줄어들므로 겹쳐서 빼면
+            // 키보드 높이만큼 두 번 밀린다.
+            .systemBarsPadding()
+            .displayCutoutPadding(),
+    ) {
         TabRow(selectedTabIndex = selected.ordinal) {
             AppTab.entries.forEach { tab ->
                 Tab(

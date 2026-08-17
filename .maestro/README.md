@@ -11,6 +11,7 @@
 | `04_filter.yaml` | 미완료/완료 탭이 각각 해당하는 항목만 보여준다 |
 | `05_clear_completed.yaml` | 완료한 항목만 한 번에 지운다 |
 | `06_due_date.yaml` | 마감을 정하면 목록에 표시되고, 완료하면 표시가 사라진다 |
+| `07_call_screen.yaml` | 통화 탭에서 내 주소가 보이고, 읽을 수 없는 SDP 는 안내 문구로 돌아온다 |
 | `common/launch_clean.yaml` | 공통 초기화 서브플로우 (`runFlow` 전용) |
 
 ## 실행

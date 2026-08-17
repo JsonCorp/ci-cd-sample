@@ -1,6 +1,6 @@
 plugins {
+    // AGP 9 부터 Kotlin 지원이 AGP 에 내장됐다 — kotlin.android 를 같이 적용하면 빌드가 거부된다.
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.kover)
@@ -15,25 +15,22 @@ ksp {
 
 android {
     namespace = "com.example.cicdsample.data"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 26
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // MigrationTestHelper 는 스키마 JSON 을 '에셋'에서 읽는다.
-    // 커밋해 둔 schemas/ 를 androidTest 에셋으로 그대로 실어 준다.
-    sourceSets.getByName("androidTest") {
-        assets.srcDir("$projectDir/schemas")
-    }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
+    // 내장 Kotlin 의 컴파일러 옵션은 android 블록 안에서 받는다(구 kotlinOptions 자리).
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
     }
 
     // :app 과 같은 기기 정의를 쓴다. 이름이 같아야 CI 에서 태스크명을 예측할 수 있다.
@@ -47,6 +44,20 @@ android {
                 }
             }
         }
+    }
+}
+
+// MigrationTestHelper 는 스키마 JSON 을 '에셋'에서 읽는다.
+// 커밋해 둔 schemas/ 를 androidTest 에셋으로 그대로 실어 준다.
+//
+// android { } 블록 안에서 하지 않는 이유: AGP 9 는 소스셋 객체를 새 DSL 타입
+// (com.android.build.api.dsl.AndroidLibrarySourceSet)으로 만들지만 "android" 확장은 아직
+// 구 타입으로 등록해 둬서, 스크립트 접근자가 sourceSets 원소를 구 인터페이스로 캐스팅하다 터진다.
+// 새 인터페이스를 명시해 확장을 구성하면 원소 타입도 새 것으로 잡힌다.
+extensions.configure<com.android.build.api.dsl.LibraryExtension>("android") {
+    sourceSets.named("androidTest") {
+        // AGP 9 에서 srcDir() 은 deprecated — directories 집합에 직접 넣는다.
+        assets.directories.add("$projectDir/schemas")
     }
 }
 

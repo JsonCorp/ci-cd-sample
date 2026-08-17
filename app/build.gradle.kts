@@ -1,6 +1,7 @@
 plugins {
+    // AGP 9 부터 Kotlin 지원이 AGP 에 내장됐다 — kotlin.android 를 같이 적용하면 빌드가 거부된다.
+    // Compose 컴파일러 플러그인은 그대로 필요하다.
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
@@ -21,12 +22,14 @@ val hasReleaseSigning = !keystorePath.isNullOrBlank() &&
 
 android {
     namespace = "com.example.cicdsample"
-    compileSdk = 35
+    // core-ktx 1.19.0 이 compileSdk 37 이상을 요구한다(AAR 메타데이터 검사).
+    // targetSdk 는 36 에 둔다 — 런타임 동작까지 한 번에 바꾸지 않는다.
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.example.cicdsample"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
 
         // CI 에서는 실행 번호를 넣어 태그마다 versionCode 가 반드시 올라가게 한다.
         versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
@@ -62,8 +65,11 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
+    // 내장 Kotlin 의 컴파일러 옵션은 android 블록 안에서 받는다(구 kotlinOptions 자리).
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
     }
     buildFeatures {
         compose = true

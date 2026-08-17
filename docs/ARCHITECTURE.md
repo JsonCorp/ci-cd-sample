@@ -301,7 +301,7 @@ CI 워크플로는 시크릿을 **하나도 쓰지 않으므로** 포크 PR 에�
 | R8 검증 | 릴리스 APK 스모크 테스트 | 게시 직전 난독화된 APK 를 에뮬레이터에 올려 대표 플로우 1개를 태운다. 미서명 빌드는 설치가 안 되므로 건너뛴다 |
 | 캐시 | Gradle + AVD 스냅샷 | AVD 캐시 키를 API 레벨에 묶어 무효화 제어 |
 | 비용 | 공개 저장소 = Actions 무료 | `concurrency` 취소 + `needs` 로 낭비 차단 |
-| 의존성 갱신 | Dependabot (gradle 주간 / actions 월간) | actions 4건 병합 완료. gradle 5건은 `compileSdk 37` 요구로 보류 |
+| 의존성 갱신 | Dependabot (gradle 주간 / actions 월간) | gradle 쪽 보류분(`compileSdk 37` 요구)은 툴체인 일괄 상향으로 해소 — AGP 9.3.1 / Gradle 9.7 / Kotlin 2.4 / compileSdk 37 |
 | 배포 확장 | GitHub Releases | Firebase App Distribution / Play Console 추가 가능 |
 
 ## 11. 요약

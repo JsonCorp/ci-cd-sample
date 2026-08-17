@@ -40,9 +40,9 @@
 | 구성요소 | 역할 | 기술 | 핵심 |
 |----------|------|------|------|
 | `:app` | 화면·상태·DI 조립 | Compose, ViewModel, Hilt | stateless 화면 + 얇은 Route |
-| `:data` | 저장소 구현 | Android Library, Coroutines Flow | 인터페이스는 domain 소유 |
+| `:data` | 저장소 구현 | Android Library, **Room**, Coroutines Flow | 인터페이스는 domain 소유 |
 | `:domain` | 규칙과 모델 | **순수 Kotlin(JVM)** | Android·DI 프레임워크 무의존 |
-| CI | PR·push 검증 | GitHub Actions | 3잡 병렬 + 아티팩트 인계 |
+| CI | PR·push 검증 | GitHub Actions | 4잡 병렬 + 아티팩트 인계 |
 | CD | 태그 기반 배포 | GitHub Actions, gh CLI | 서명 APK/AAB → Releases |
 | E2E | 실기기 검증 | Maestro | testTag → resource-id |
 
@@ -61,8 +61,9 @@
         ┌───────────────────┐   ┌──────────────────────────┐
         │ :data (Android)   │──▶│ :domain (순수 Kotlin JVM)│
         │ DefaultTaskRepo   │   │ Task · TaskStats         │
-        │ InMemoryDataSource│   │ TaskRepository(interface)│
-        │ DataModule(Hilt)  │   │ UseCase × 6              │
+        │ RoomTaskDataSource│   │ TaskRepository(interface)│
+        │ AppDatabase(v2)   │   │ UseCase × 6 · dueStatus  │
+        │ DataModule(Hilt)  │   │                          │
         └───────────────────┘   └──────────────────────────┘
                                           ▲
                                           │ 아무것도 의존하지 않는다
@@ -77,17 +78,21 @@
 
 | 모듈 | 주요 타입 | 책임 | 테스트 |
 |------|-----------|------|--------|
-| `:domain` | `Task`, `Priority`, `TaskFilter`, `TaskStats` | 불변 모델 | — |
+| `:domain` | `Task`, `Priority`, `TaskFilter`, `TaskStats`, `DueStatus` | 불변 모델 + 마감 상태 계산 | 단위 8 |
 | `:domain` | `TaskRepository` | 저장소 계약(인터페이스) | 페이크로 대체 |
 | `:domain` | `AddTaskUseCase` 외 5개 | 검증·정렬·집계 규칙 | 단위 28 |
 | `:domain` | `FakeTaskRepository` (testFixtures) | 모듈 간 공유 페이크 | — |
-| `:data` | `InMemoryTaskDataSource` | id/order 발급, Mutex 로 쓰기 직렬화 | 단위 6 |
-| `:data` | `DefaultTaskRepository` | 인터페이스 구현(위임) | 단위 6 |
+| `:data` | `TaskLocalDataSource` | 로컬 저장 계약(인터페이스) | — |
+| `:data` | `RoomTaskDataSource` · `TaskDao` | Room 구현, 실제 SQL 검증 | 계측 9 |
+| `:data` | `AppDatabase` · `MIGRATION_1_2` | 스키마 v2, 스키마 JSON 커밋 | 마이그레이션 4 |
+| `:data` | `InMemoryTaskDataSource` (src/test) | JVM 테스트용 페이크 | — |
+| `:data` | `DefaultTaskRepository` | 인터페이스 구현(위임) | 단위 7 |
 | `:data` | `DataModule` | `@Binds` 로 인터페이스↔구현 연결 | — |
 | `:app` | `TaskViewModel` | 상태 조립, 에러 문구 변환 | 단위 10 |
-| `:app` | `TaskScreen` | **stateless** 렌더링 | Compose UI 8 |
+| `:app` | `DueOption` | 선택지 → epoch milli 변환(순수 함수) | 단위 6 |
+| `:app` | `TaskScreen` | **stateless** 렌더링 | Compose UI 11 |
 | `:app` | `TaskRoute` | ViewModel 연결(얇은 래퍼) | — |
-| `:app` | `MainActivity` | `testTagsAsResourceId = true` | E2E 5 |
+| `:app` | `MainActivity` | `testTagsAsResourceId = true` | E2E 6 |
 
 ## 04. DI 구성
 
@@ -101,8 +106,11 @@ Hilt 2.53.1 + KSP. `:domain` 은 **DI 프레임워크를 모른다** — 생성�
         │    TaskRepository ◀── DefaultTaskRepository│
         │                            │               │
         │                            ▼               │
-        │                   InMemoryTaskDataSource   │
-        │                        (@Singleton)        │
+        │                   TaskLocalDataSource      │
+        │                       ◀── RoomTaskDataSource│
+        │                            │               │
+        │                            ▼               │
+        │                   AppDatabase (Room, v2)   │
         └────────────────┬───────────────────────────┘
                          │
                          ▼
@@ -185,11 +193,11 @@ Hilt 2.53.1 + KSP. `:domain` 은 **DI 프레임워크를 모른다** — 생성�
         │  (모든 빌드 잡은 gradle-wrapper.jar 무결성 검증부터)
         ├───────────────┬───────────────┬──────────────┐
         ▼               ▼               ▼              │
-  ┌───────────┐   ┌───────────┐   ┌───────────┐        │
-  │ unit-test │   │ ui-test   │   │ build     │ ← 세 잡 병렬
-  │ 단위+린트  │   │ Compose   │   │assembleDbg│        │
-  │           │   │ GMD       │   │           │        │
-  └─────┬─────┘   └─────┬─────┘   └─────┬─────┘        │
+  ┌───────────┐ ┌───────────┐ ┌──────────────┐ ┌───────────┐
+  │ unit-test │ │ ui-test   │ │migration-test│ │ build     │ ← 네 잡 병렬
+  │ 단위+린트  │ │ Compose   │ │ 스키마 가드   │ │assembleDbg│
+  │           │ │ GMD       │ │ + Room GMD   │ │           │
+  └─────┬─────┘ └─────┬─────┘ └──────┬───────┘ └─────┬─────┘
         │               │               │ app-debug-apk (artifact)
         └───────┬───────┴───────────────┤              │
                 │                       ▼              │
@@ -213,7 +221,8 @@ Hilt 2.53.1 + KSP. `:domain` 은 **DI 프레임워크를 모른다** — 생성�
 | 잡 | 트리거 조건 | 캐시 | 산출물 |
 |----|-------------|------|--------|
 | `unit-test` | 항상 | `gradle/actions/setup-gradle` | 테스트·린트 HTML, Kover 커버리지, Job Summary 집계표 |
-| `ui-test` | 항상 | GMD 시스템 이미지 + AVD | `androidTests/` HTML 리포트 |
+| `ui-test` | 항상 | 없음(런너 간 AVD 복원이 GMD 를 깨뜨린다) | `androidTests/` HTML 리포트 |
+| `migration-test` | 항상 | 없음 | 마이그레이션 리포트. 스키마 가드가 먼저 돌아 값싸게 차단한다 |
 | `build` | 항상 | `setup-gradle` | `app-debug.apk`, Job Summary APK 크기 |
 | `e2e` | `needs: [build, unit-test]` | AVD 스냅샷(`~/.android/avd`) | `report.html`, 실패 스크린샷 |
 | `dependency-submission` | `main` push + 같은 저장소 PR | — | 의존성 그래프(→ Dependabot 알림, 검토 비교 대상) |
@@ -228,6 +237,8 @@ Hilt 2.53.1 + KSP. `:domain` 은 **DI 프레임워크를 모른다** — 생성�
   에뮬레이터 액션에 의존하지 않고, `unit-test`·`build` 와 병렬이라 전체 시간이 늘지 않는다.
   이미지는 `aosp-atd`(테스트 전용 경량본)를 쓴다.
 - **`e2e` 는 `unit-test` 도 기다린다.** 로직이 깨진 채로 에뮬레이터를 5분 태우지 않는다.
+- **마이그레이션 잡은 값싼 검사를 먼저 한다.** 스키마 JSON 이 커밋됐는지를 셸에서 확인한 뒤에야
+  에뮬레이터를 켠다. 5분 태우고 나서 "스키마를 커밋 안 했네" 를 알게 되는 건 낭비다.
 - **린트는 `if: always()`** — 단위 테스트가 실패해도 린트 결과를 함께 보여준다. 왕복이 한 번 줄어든다.
 - `concurrency: cancel-in-progress` — 같은 브랜치에 새 커밋이 오면 이전 실행을 취소한다.
 - `paths-ignore` 는 **push 에만** 건다. PR 에서는 항상 돌아 상태 검사가 비지 않는다.
@@ -282,7 +293,8 @@ CI 워크플로는 시크릿을 **하나도 쓰지 않으므로** 포크 PR 에�
 
 | 항목 | 현재 | 근거 / 확장 방향 |
 |------|------|------------------|
-| 영속화 | 메모리(`MutableStateFlow`) | 파이프라인이 주제라 Room 제외. 붙여도 `TaskRepository` 는 그대로 |
+| 영속화 | Room (스키마 v2) | 스키마 JSON 을 커밋하고 마이그레이션을 계측 테스트로 검증한다. `TaskRepository` 는 그대로였다 — 도메인은 한 줄도 안 바뀌었다 |
+| 마이그레이션 | `MigrationTestHelper` + 스키마 가드 | 예전 버전 DB 를 실제로 만들어 검증. 버전만 올리고 스키마를 커밋 안 하면 에뮬레이터를 켜기 전에 차단된다 |
 | 정적 분석 | Android Lint (`lintDebug`) | detekt/ktlint 는 플러그인 버전 리스크로 보류. `:domain` 은 순수 JVM 이라 Lint 대상 밖이다 |
 | 공급망 | wrapper 검증 + dependency-submission/review | 커밋된 wrapper jar 무결성, 취약 의존성 유입 차단, Dependabot 알림. 포크 PR 은 토큰 제약으로 제외 |
 | 커버리지 | Kover 집계 리포트 | 세 모듈을 `custom` 변형으로 묶어 루트에서 하나로 낸다. 단위 테스트만 계측되고 계측 테스트는 빠진다 |

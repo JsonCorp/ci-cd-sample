@@ -24,10 +24,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.cicdsample.domain.model.DueStatus
 import com.example.cicdsample.domain.model.Priority
 import com.example.cicdsample.domain.model.Task
 import com.example.cicdsample.domain.model.TaskFilter
 import com.example.cicdsample.domain.model.TaskStats
+import com.example.cicdsample.domain.model.dueStatus
+import java.time.LocalDate
 
 /**
  * 상태를 받아 그리기만 하는 화면(stateless).
@@ -40,6 +43,7 @@ fun TaskScreen(
     state: TaskUiState,
     onTitleChange: (String) -> Unit,
     onPriorityChange: (Priority) -> Unit,
+    onDueChange: (DueOption) -> Unit,
     onAddClick: () -> Unit,
     onToggle: (Long) -> Unit,
     onDelete: (Long) -> Unit,
@@ -63,9 +67,11 @@ fun TaskScreen(
         InputSection(
             title = state.inputTitle,
             priority = state.inputPriority,
+            due = state.inputDue,
             errorMessage = state.errorMessage,
             onTitleChange = onTitleChange,
             onPriorityChange = onPriorityChange,
+            onDueChange = onDueChange,
             onAddClick = onAddClick,
         )
 
@@ -125,9 +131,11 @@ private fun StatsSection(stats: TaskStats) {
 private fun InputSection(
     title: String,
     priority: Priority,
+    due: DueOption,
     errorMessage: String?,
     onTitleChange: (String) -> Unit,
     onPriorityChange: (Priority) -> Unit,
+    onDueChange: (DueOption) -> Unit,
     onAddClick: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -160,6 +168,22 @@ private fun InputSection(
                 modifier = Modifier.testTag("btn_add"),
             ) {
                 Text("추가")
+            }
+        }
+
+        // 마감일. 날짜 선택기 대신 고정 선택지 세 개만 둔다 —
+        // E2E 플로우가 실행 날짜에 흔들리지 않는다.
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            DueOption.entries.forEach { option ->
+                FilterChip(
+                    selected = option == due,
+                    onClick = { onDueChange(option) },
+                    label = { Text(option.label()) },
+                    modifier = Modifier.testTag("btn_due_${option.name.lowercase()}"),
+                )
             }
         }
 
@@ -228,6 +252,19 @@ private fun TaskRow(
             textDecoration = if (task.done) TextDecoration.LineThrough else null,
             style = MaterialTheme.typography.bodyLarge,
         )
+        // 완료된 항목은 dueStatus 가 NONE 을 돌려주므로 자연히 사라진다.
+        task.dueStatus(LocalDate.now()).label()?.let { dueLabel ->
+            Text(
+                text = dueLabel,
+                modifier = Modifier.testTag("text_due_$index"),
+                style = MaterialTheme.typography.labelMedium,
+                color = if (task.dueStatus(LocalDate.now()) == DueStatus.OVERDUE) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        }
         Text(
             text = task.priority.label(),
             style = MaterialTheme.typography.labelMedium,
@@ -267,6 +304,7 @@ private fun TaskScreenPreview() {
             ),
             onTitleChange = {},
             onPriorityChange = {},
+            onDueChange = {},
             onAddClick = {},
             onToggle = {},
             onDelete = {},

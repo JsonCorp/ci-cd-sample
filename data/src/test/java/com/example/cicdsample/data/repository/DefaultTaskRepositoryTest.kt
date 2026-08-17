@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -79,6 +80,22 @@ class DefaultTaskRepositoryTest {
 
         assertEquals(2, removed)
         assertEquals(listOf("미완료"), repository.observeTasks().first().map { it.title })
+    }
+
+    @Test
+    fun `마감일은 넣은 그대로 보존되고 기본값은 null 이다`() = runTest {
+        val repository = repository()
+        val due = 1_700_000_000_000L
+
+        val withDue = repository.addTask("마감 있음", Priority.NORMAL, due)
+        val withoutDue = repository.addTask("마감 없음", Priority.NORMAL)
+
+        assertEquals(due, withDue.dueDate)
+        assertNull(withoutDue.dueDate)
+
+        val stored = repository.observeTasks().first()
+        assertEquals(due, stored.single { it.id == withDue.id }.dueDate)
+        assertNull(stored.single { it.id == withoutDue.id }.dueDate)
     }
 
     @Test

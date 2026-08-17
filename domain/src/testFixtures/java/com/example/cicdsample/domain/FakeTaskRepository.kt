@@ -22,13 +22,14 @@ class FakeTaskRepository(initial: List<Task> = emptyList()) : TaskRepository {
 
     override fun observeTasks(): Flow<List<Task>> = state.asStateFlow()
 
-    override suspend fun addTask(title: String, priority: Priority): Task {
+    override suspend fun addTask(title: String, priority: Priority, dueDate: Long?): Task {
         val task = Task(
             id = nextId++,
             title = title,
             priority = priority,
             done = false,
             order = nextOrder++,
+            dueDate = dueDate,
         )
         state.update { it + task }
         return task
@@ -63,4 +64,12 @@ fun task(
     priority: Priority = Priority.NORMAL,
     done: Boolean = false,
     order: Int = id.toInt(),
-): Task = Task(id = id, title = title, priority = priority, done = done, order = order)
+    dueDate: Long? = null,
+): Task = Task(
+    id = id,
+    title = title,
+    priority = priority,
+    done = done,
+    order = order,
+    dueDate = dueDate,
+)

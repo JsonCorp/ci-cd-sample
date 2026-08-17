@@ -48,6 +48,11 @@ kover {
                     // Compose 컴파일러 생성물
                     "*.ComposableSingletons$*",
                     "*.LiveLiterals$*",
+
+                    // Room 생성물 — AppDatabase_Impl, TaskDao_Impl 과 그 익명 내부 클래스들.
+                    // 손으로 짠 코드가 아니고, 실제 검증은 마이그레이션·DAO 계측 테스트가 한다
+                    // (그 결과는 Kover 가 수집하지 못하므로 분모에만 남아 수치를 왜곡한다).
+                    "*_Impl", "*_Impl$*",
                 )
                 packages(
                     "hilt_aggregated_deps",

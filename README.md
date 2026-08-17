@@ -18,11 +18,11 @@
 ```
 ci-cd-sample/
 ├── app/          Android application — Compose UI, ViewModel, Hilt 조립
-├── data/         Android library     — Repository 구현, 로컬 DataSource
+├── data/         Android library     — Repository 구현, Room DB(+스키마 JSON)
 ├── domain/       순수 Kotlin(JVM)    — Model, Repository 인터페이스, UseCase
-├── .maestro/     E2E 플로우 5개 + common/ 서브플로우
+├── .maestro/     E2E 플로우 6개 + common/ 서브플로우
 ├── .github/
-│   ├── workflows/ci.yml       PR·push 검증 (단위·린트 / UI / 빌드 / E2E / 공급망)
+│   ├── workflows/ci.yml       PR·push 검증 (단위·린트 / UI / 마이그레이션 / 빌드 / E2E / 공급망)
 │   ├── workflows/release.yml  v* 태그 → 검증 → 서명 릴리스
 │   ├── pull_request_template.md
 │   └── dependabot.yml
@@ -42,15 +42,20 @@ ci-cd-sample/
 | 정렬 | 미완료 먼저 → 우선순위 높은 순 → 먼저 등록한 순 |
 | 통계 | 완료율 반올림, 0건일 때 0으로 나누지 않음 |
 
-## 3단 검증
+## 4단 검증
 
 | 티어 | 위치 | 개수 | 어디서 도나 |
 |---|---|---:|---|
-| 단위 테스트 | `domain/src/test`, `data/src/test`, `app/src/test` | 44 | JVM (에뮬레이터 불필요) |
-| Compose UI 테스트 | `app/src/androidTest` | 8 | 관리형 디바이스(GMD) |
-| Maestro E2E | `.maestro/` | 5 | 기기/에뮬레이터 |
+| 단위 테스트 | `domain/src/test`, `data/src/test`, `app/src/test` | 59 | JVM (에뮬레이터 불필요) |
+| Compose UI 테스트 | `app/src/androidTest` | 11 | 관리형 디바이스(GMD) |
+| DB·마이그레이션 테스트 | `data/src/androidTest` | 13 | 관리형 디바이스(GMD) |
+| Maestro E2E | `.maestro/` | 6 | 기기/에뮬레이터 |
 
-세 티어 모두 CI 에서 돈다. 관리형 디바이스를 쓰므로 UI 테스트는 에뮬레이터를 미리 띄울 필요가 없다.
+네 티어 모두 CI 에서 돈다. 관리형 디바이스를 쓰므로 계측 테스트는 에뮬레이터를 미리 띄울 필요가 없다.
+
+마이그레이션 테스트는 커밋된 스키마 JSON(`data/schemas/`)으로 **예전 버전 DB 를 실제로 만들어**
+마이그레이션을 돌리고 결과를 최신 스키마와 대조한다. 스키마를 바꾸면서 마이그레이션을 빠뜨리면
+앱은 '업데이트한 사용자'에게만 죽는데 — 신규 설치는 멀쩡하다 — 그 상황을 CI 가 대신 재현한다.
 
 커버리지는 Kover 로 세 모듈을 하나로 집계해 PR 요약에 표로 붙는다
 (`./gradlew :koverXmlReportCustom :koverHtmlReportCustom`).
@@ -95,6 +100,7 @@ required 로 걸어야 CI 가 게이트로 동작한다.
 |---|---|
 | `단위 테스트 & 린트` | `unit-test` |
 | `Compose UI 테스트` | `ui-test` |
+| `DB 마이그레이션 테스트` | `migration-test` |
 | `디버그 APK 빌드` | `build` |
 | `Maestro E2E (에뮬레이터)` | `e2e` |
 

@@ -1,0 +1,48 @@
+appId: com.example.cicdsample
+name: 마감일 — 마감을 정하면 목록에 표시되고, 완료하면 표시가 사라진다
+---
+- runFlow: common/launch_clean.yaml
+
+# 마감을 고르지 않고 추가하면 표시가 없다
+- tapOn:
+    id: "input_title"
+# Maestro 의 inputText 는 ASCII 만 넣을 수 있어 입력값은 영문으로 쓴다.
+- inputText: "No deadline"
+- tapOn:
+    id: "btn_add"
+
+- assertVisible:
+    text: "No deadline"
+- assertNotVisible:
+    id: "text_due_0"
+
+# 마감을 '오늘'로 고르고 추가한다
+- runFlow: common/launch_clean.yaml
+- tapOn:
+    id: "btn_due_today"
+- tapOn:
+    id: "input_title"
+- inputText: "Pay bills"
+- tapOn:
+    id: "btn_add"
+
+# 표시 문구는 testTag 로 집는다. text 로 "오늘" 을 찾으면 입력 칩과 구별되지 않는다.
+- assertVisible:
+    id: "text_due_0"
+    text: "오늘"
+
+# 완료하면 마감 표시가 사라진다 — 이미 끝난 일에 마감을 띄우는 건 소음이라는 도메인 규칙.
+- tapOn:
+    id: "checkbox_task_0"
+- assertVisible:
+    id: "text_stats"
+    text: "1 / 1 완료 (100%)"
+- assertNotVisible:
+    id: "text_due_0"
+
+# 다시 미완료로 되돌리면 표시가 돌아온다
+- tapOn:
+    id: "checkbox_task_0"
+- assertVisible:
+    id: "text_due_0"
+    text: "오늘"

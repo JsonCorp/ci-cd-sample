@@ -22,6 +22,7 @@ fun TaskRoute(
         state = state,
         onTitleChange = viewModel::onTitleChange,
         onPriorityChange = viewModel::onPriorityChange,
+        onDueChange = viewModel::onDueChange,
         onAddClick = viewModel::onAddClick,
         onToggle = viewModel::onToggle,
         onDelete = viewModel::onDelete,

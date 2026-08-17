@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.Flow
 interface TaskRepository {
     fun observeTasks(): Flow<List<Task>>
 
-    suspend fun addTask(title: String, priority: Priority): Task
+    suspend fun addTask(title: String, priority: Priority, dueDate: Long? = null): Task
 
     suspend fun setDone(id: Long, done: Boolean): Boolean
 

@@ -15,5 +15,6 @@ data class TaskUiState(
     val stats: TaskStats = TaskStats.EMPTY,
     val inputTitle: String = "",
     val inputPriority: Priority = Priority.NORMAL,
+    val inputDue: DueOption = DueOption.NONE,
     val errorMessage: String? = null,
 )

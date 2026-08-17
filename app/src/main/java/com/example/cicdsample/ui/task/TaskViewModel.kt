@@ -13,6 +13,7 @@ import com.example.cicdsample.domain.usecase.TitleError
 import com.example.cicdsample.domain.usecase.TitleValidationException
 import com.example.cicdsample.domain.usecase.ToggleTaskUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.LocalDate
 import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,6 +44,7 @@ class TaskViewModel @Inject constructor(
     private data class FormState(
         val title: String = "",
         val priority: Priority = Priority.NORMAL,
+        val due: DueOption = DueOption.NONE,
         val errorMessage: String? = null,
     )
 
@@ -61,6 +63,7 @@ class TaskViewModel @Inject constructor(
             stats = stats,
             inputTitle = formState.title,
             inputPriority = formState.priority,
+            inputDue = formState.due,
             errorMessage = formState.errorMessage,
         )
     }.stateIn(
@@ -78,11 +81,20 @@ class TaskViewModel @Inject constructor(
         form.value = form.value.copy(priority = priority)
     }
 
+    fun onDueChange(due: DueOption) {
+        form.value = form.value.copy(due = due)
+    }
+
     fun onAddClick() {
         val current = form.value
+        // 시계는 여기서만 읽는다. 날짜 계산 자체는 DueOption.toEpochMilli 가 today 를 받아
+        // 순수 함수로 처리하므로 그쪽은 어떤 날짜로도 결정적으로 테스트된다.
+        val dueDate = current.due.toEpochMilli(LocalDate.now())
         viewModelScope.launch {
-            addTask(current.title, current.priority)
-                .onSuccess { form.value = FormState(priority = current.priority) }
+            addTask(current.title, current.priority, dueDate)
+                // 추가에 성공하면 제목만 비우고 우선순위·마감 선택은 유지한다 —
+                // 비슷한 할 일을 연달아 넣을 때 매번 다시 고르지 않아도 된다.
+                .onSuccess { form.value = FormState(priority = current.priority, due = current.due) }
                 .onFailure { error ->
                     form.value = current.copy(errorMessage = error.toMessage())
                 }

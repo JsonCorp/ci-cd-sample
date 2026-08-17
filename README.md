@@ -82,7 +82,8 @@ powershell -ExecutionPolicy Bypass -File scripts\run-tests.ps1
   모든 빌드 잡은 `gradle-wrapper.jar` 무결성을 먼저 검증하고, PR 에는 `dependency-review` 가 붙는다.
 - **`release.yml`** — `v*` 태그를 밀면 먼저 단위 테스트·린트를 다시 돌리고(`verify`), 태그와 `versionName`
   이 같은지 확인한 뒤, 시크릿의 키스토어로 서명한 APK/AAB 를 `SHA256SUMS` 와 함께 GitHub Releases 에
-  올린다. 게시 전 `apksigner verify` 로 서명이 실제로 붙었는지 확인한다.
+  올린다. 게시 전 `apksigner verify` 로 서명을 확인하고, 난독화된 릴리스 APK 를 에뮬레이터에
+  실제로 올려 대표 플로우 하나를 태운다(R8 스모크) — 릴리스에서만 터지는 결함을 게시 전에 잡는다.
   시크릿이 없는 포크에서는 **서명을 건너뛰고 계속 진행**한다.
 
 ### 브랜치 보호 설정

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  권한을 :app 이 아니라 여기 적는다. 소켓과 마이크를 실제로 여는 모듈이 :data 이므로,
+  이 모듈을 쓰는 쪽이 무엇을 요구하는지 매니페스트 병합으로 자동으로 따라가게 둔다.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- RTP 를 UDP 소켓으로 직접 주고받는다. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- 마이크. 런타임 요청은 화면이 있는 :app 이 한다. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- AudioManager.mode 를 통화 모드로 바꾸는 데 필요하다(설치 시 부여). -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+</manifest>

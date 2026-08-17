@@ -63,11 +63,13 @@ class MigrationTest {
         helper.createDatabase(TEST_DB, 1).use { db ->
             db.execSQL(
                 "INSERT INTO tasks (title, priority, done, sort_order) VALUES (?, ?, ?, ?)",
-                arrayOf("남은 일", "HIGH", 0, 0),
+                // 타입 인자를 명시한다 — String/Int 를 섞으면 Kotlin 2.4 는 교집합 타입
+                // (Comparable & Serializable)으로 추론하고, reified 로 넘기는 것을 에러로 본다.
+                arrayOf<Any>("남은 일", "HIGH", 0, 0),
             )
             db.execSQL(
                 "INSERT INTO tasks (title, priority, done, sort_order) VALUES (?, ?, ?, ?)",
-                arrayOf("끝난 일", "LOW", 1, 1),
+                arrayOf<Any>("끝난 일", "LOW", 1, 1),
             )
         }
 
@@ -102,7 +104,7 @@ class MigrationTest {
 
         db.execSQL(
             "INSERT INTO tasks (title, priority, done, sort_order, due_date) VALUES (?, ?, ?, ?, ?)",
-            arrayOf("마감 있는 일", "NORMAL", 0, 0, 1_700_000_000_000L),
+            arrayOf<Any>("마감 있는 일", "NORMAL", 0, 0, 1_700_000_000_000L),
         )
 
         db.query("SELECT due_date FROM tasks WHERE title = '마감 있는 일'").use { cursor ->

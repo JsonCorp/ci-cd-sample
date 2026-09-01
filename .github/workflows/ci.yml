@@ -484,7 +484,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       # PR 코멘트 요약은 pull-requests: write 가 필요하다. 상태 검사와 잡 로그로 충분하므로 켜지 않는다.
-      - uses: actions/dependency-review-action@v4
+      - uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: high
 
